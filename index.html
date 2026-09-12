@@ -243,15 +243,22 @@
     color: var(--ink);
     background: var(--cream);
     width: 100%;
+    height: 44px;
+    line-height: 1.2;
     outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type="time"] {
+    -webkit-min-logical-width: 0;
   }
   input[type="text"]:focus, input[type="time"]:focus, input[type="number"]:focus {
     border-color: var(--rose);
     background: #fff;
   }
 
-  .event-name-field { flex: 1.3; }
-  .event-time-field { flex: 1; }
+  .event-name-field { flex: 1.3; min-width: 0; }
+  .event-time-field { flex: 1; min-width: 118px; }
 
   /* ---------- Start-by banner ---------- */
   .startby {
@@ -608,6 +615,39 @@
     color: var(--ink-soft);
     line-height: 1.5;
     margin-bottom: 16px;
+  }
+  .howto-list {
+    list-style: none;
+    counter-reset: howto;
+    padding: 0;
+    margin: 0 0 18px;
+  }
+  .howto-list li {
+    position: relative;
+    padding-left: 32px;
+    margin-bottom: 12px;
+    font-size: 13.5px;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .howto-list li:last-child { margin-bottom: 0; }
+  .howto-list li::before {
+    counter-increment: howto;
+    content: counter(howto);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--pale);
+    color: var(--rose-deep);
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 12.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .example-preview {
     background: var(--bg);
@@ -1307,7 +1347,11 @@ if (!window.storage) {
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">how it works</div>';
-    html += '<div class="example-intro">Set an event time, then add the steps that lead up to it — shower, drive, whatever it takes. Each step stacks further back, so you always know your "start by" time. Here\'s an example:</div>';
+    html += '<ol class="howto-list">';
+    html += '  <li>Set an event name and time</li>';
+    html += '  <li>Add the steps you need before it — start with whatever comes right before the event, then work backward (you can always drag to reorder)</li>';
+    html += '  <li>See your full schedule and know exactly when to start</li>';
+    html += '</ol>';
     html += '<div class="example-preview">';
     html += '  <div class="startby"><div class="eyebrow">start by</div><div class="time">' + minutesToClock(exSched.startOverall) + '</div></div>';
     html += renderTimelineHTML(exSched, EXAMPLE_EVENT.name, false, 'example');

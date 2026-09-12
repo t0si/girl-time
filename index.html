@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<!--
+  FUTURE FEATURES / ROADMAP (not yet built):
+  1. Export steps to Google Calendar — push each step (and/or the event) as calendar entries.
+  2. Step memory / smart durations — remember how long a given step label has taken before
+     (e.g. "shower" -> 40 min, "blow dry hair" -> 10 min) and suggest that duration automatically
+     when the same label is typed again.
+  3. Share a saved routine with someone else (export/send link or file).
+  4. Optional event END time / duration — right now each event is just a single point in time,
+     so the "not enough time between events" warning compares against the next event's START time
+     only. Adding an optional duration per event would make that warning smarter.
+
+  DONE:
+  - Drag-to-reorder steps (three-bar handle) replaced the earlier chronological-entry toggle —
+    steps always add to the bottom of the list now, and you drag to fix the order, so the math
+    still counts backward from the event regardless of typing order.
+  - Multiple events in one day, each with its own steps + start-by time, stacked in order,
+    with a warning if one event's prep would need to start before the previous event's time.
+  - Editing an existing step's label/duration in place (tap a step in the timeline).
+  - Step duration memory: the app remembers durations per step label and suggests them again.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>girl time</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500;1,9..144,600&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+  :root {
+    --bg: #FBF5F2;
+    --surface: #FFFFFF;
+    --ink: #35242F;
+    --ink-soft: #8C7784;
+    --ink-faint: #C6B6BF;
+    --rose: #D97D9E;
+    --rose-deep: #B65D80;
+    --berry: #5E2F49;
+    --line: #EEDDE3;
+    --pale: #FBE7EE;
+    --cream: #FBF5F2;
+    --amber-bg: #FBEEDD;
+    --amber-ink: #8A5A1F;
+    --shadow: 0 2px 14px rgba(94, 47, 73, 0.08);
+    --radius: 18px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Manrope', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100%;
+  }
+
+  body {
+    background-image:
+      radial-gradient(circle at 15% 8%, rgba(217,125,158,0.07), transparent 40%),
+      radial-gradient(circle at 90% 85%, rgba(94,47,73,0.05), transparent 45%);
+    background-attachment: fixed;
+  }
+
+  #app {
+    max-width: 460px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+    min-height: 100vh;
+  }
+
+  /* ---------- Header ---------- */
+  .wordmark {
+    font-family: 'Fraunces', serif;
+    font-style: normal;
+    font-weight: 600;
+    font-size: 27px;
+    letter-spacing: -0.015em;
+    color: var(--berry);
+    margin: 0;
+  }
+  .wordmark span { color: var(--rose); font-style: normal; }
+
+  .wordmark-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .planner-label {
+    font-family: 'Manrope', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--rose-deep);
+    background: var(--pale);
+    padding: 3px 9px;
+    border-radius: 20px;
+  }
+
+  .tagline {
+    margin: 4px 0 22px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    letter-spacing: 0.01em;
+  }
+
+  .header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .routines-link {
+    background: none;
+    border: none;
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--rose-deep);
+    padding: 8px 2px;
+    cursor: pointer;
+    white-space: nowrap;
+    text-decoration: underline;
+    text-decoration-color: var(--rose);
+    text-underline-offset: 3px;
+  }
+  .routines-link:active { opacity: 0.6; }
+
+  /* ---------- Undo / start over ---------- */
+  .utility-row {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .utility-btn {
+    font-family: 'Manrope', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 20px;
+    border: 1.5px solid transparent;
+    width: 80px;
+    text-align: center;
+  }
+  .utility-btn.undo { background: var(--pale); color: var(--rose-deep); border-color: var(--pale); }
+  .utility-btn.undo:active { background: var(--rose); color: #fff; }
+  .utility-btn.undo:disabled { background: transparent; border-color: var(--line); color: var(--ink-faint); cursor: not-allowed; }
+  .utility-btn.reset { background: #f7e2e7; color: #a24a63; border-color: #f7e2e7; }
+  .utility-btn.reset:active { background: #a24a63; color: #fff; }
+
+  .warning-text {
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+    margin-bottom: 18px;
+  }
+  .primary-btn.danger { background: #b6425d; }
+  .primary-btn.danger:active { background: #93334a; }
+
+  /* ---------- Event sections ---------- */
+  .event-section {
+    padding-top: 22px;
+    margin-top: 4px;
+    border-top: 1px dashed var(--line);
+  }
+  .event-section:first-of-type {
+    padding-top: 0;
+    margin-top: 0;
+    border-top: none;
+  }
+
+  .warning-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: var(--amber-bg);
+    color: var(--amber-ink);
+    border-radius: 12px;
+    padding: 11px 14px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    margin-bottom: 12px;
+  }
+  .warning-banner .glyph { flex-shrink: 0; font-size: 14px; }
+
+  .event-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px 10px;
+    margin-bottom: 8px;
+  }
+  .event-card-remove-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 4px;
+  }
+  .remove-event-link {
+    background: none;
+    border: none;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-faint);
+    cursor: pointer;
+    padding: 4px 2px;
+  }
+  .remove-event-link:active { color: #b6425d; }
+
+  /* ---------- Event card ---------- */
+  .event-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 18px 18px 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 22px;
+  }
+
+  .field-label {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  .event-inputs {
+    display: flex;
+    gap: 8px;
+  }
+
+  .emoji-btn {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border: 1.5px solid var(--line);
+    border-radius: 11px;
+    background: var(--cream);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .emoji-btn:active { background: var(--pale); border-color: var(--rose); }
+
+  .emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+  .emoji-cell {
+    background: var(--surface);
+    border: 1.5px solid var(--line);
+    border-radius: 12px;
+    font-size: 22px;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .emoji-cell:active { background: var(--pale); border-color: var(--rose); }
+
+  input[type="text"], input[type="time"], input[type="number"] {
+    font-family: 'Manrope', sans-serif;
+    border: 1.5px solid var(--line);
+    border-radius: 11px;
+    padding: 10px 12px;
+    font-size: 15px;
+    color: var(--ink);
+    background: var(--cream);
+    width: 100%;
+    outline: none;
+  }
+  input[type="text"]:focus, input[type="time"]:focus, input[type="number"]:focus {
+    border-color: var(--rose);
+    background: #fff;
+  }
+
+  .event-name-field { flex: 1.3; }
+  .event-time-field { flex: 1; }
+
+  /* ---------- Start-by banner ---------- */
+  .startby {
+    text-align: center;
+    margin: 4px 0 18px;
+  }
+  .startby .eyebrow {
+    font-size: 12px;
+    color: var(--rose-deep);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    margin-bottom: 2px;
+  }
+  .startby .time {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 40px;
+    color: var(--berry);
+    line-height: 1.1;
+  }
+
+  /* ---------- Timeline ---------- */
+  .timeline {
+    position: relative;
+    padding-left: 34px;
+  }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 9px;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--pale), var(--line) 85%, var(--berry));
+  }
+
+  .step-row {
+    position: relative;
+    padding: 12px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .step-row:last-of-type { border-bottom: none; }
+
+  .step-row::before {
+    content: attr(data-emoji);
+    position: absolute;
+    left: -32px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1.5px solid var(--pale);
+    font-size: 13px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .step-time {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--berry);
+    width: 74px;
+    flex-shrink: 0;
+  }
+
+  .step-info { flex: 1; min-width: 0; }
+  .step-info[data-action="edit-step"] { cursor: pointer; }
+  .edit-hint {
+    font-size: 11px;
+    opacity: 0.4;
+    vertical-align: middle;
+  }
+  .step-info[data-action="edit-step"]:active .edit-hint { opacity: 0.9; }
+  .step-label {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .step-duration {
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-top: 1px;
+  }
+
+  .step-actions {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .icon-btn {
+    background: none;
+    border: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    color: var(--ink-faint);
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .icon-btn:active { background: var(--pale); color: var(--rose-deep); }
+  .icon-btn:disabled { opacity: 0.25; }
+  .icon-btn.delete:active { color: #b6425d; }
+
+  /* ---------- Event anchor node ---------- */
+  .event-node {
+    position: relative;
+    padding: 14px 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .event-node::before {
+    content: "📍";
+    position: absolute;
+    left: -33px;
+    top: 16px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--berry);
+    box-shadow: 0 0 0 4px var(--pale);
+    font-size: 13px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .event-node .step-time { color: var(--berry); font-size: 17px; }
+  .event-node .step-label {
+    font-family: 'Fraunces', serif;
+    font-style: normal;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--berry);
+  }
+  .event-node .step-duration { color: var(--rose-deep); font-weight: 600; }
+
+  .empty-note {
+    color: var(--ink-soft);
+    font-size: 13.5px;
+    padding: 8px 0 18px 0;
+    line-height: 1.5;
+  }
+
+  /* ---------- Add step ---------- */
+  .add-step-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px 18px 18px;
+    margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  .add-step-title-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .add-step-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--berry);
+    margin-bottom: 0;
+  }
+
+  .drag-handle {
+    cursor: grab;
+    touch-action: none;
+    font-size: 15px;
+    letter-spacing: -1px;
+  }
+  .drag-handle:active { cursor: grabbing; }
+  .step-row.dragging {
+    opacity: 0.92;
+    background: #fff;
+    box-shadow: 0 8px 20px rgba(94,47,73,0.22);
+    border-radius: 12px;
+    z-index: 5;
+    position: relative;
+  }
+
+  .add-step-row1 { margin-bottom: 10px; }
+  .step-hint {
+    font-size: 12px;
+    color: var(--rose-deep);
+    font-weight: 600;
+    margin-top: 7px;
+    cursor: pointer;
+    background: var(--pale);
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+  }
+  .step-hint:active { background: var(--rose); color: #fff; }
+  .add-step-row2 {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  .dur-field { flex: 1; }
+  .dur-field input { text-align: center; }
+
+  .primary-btn {
+    background: var(--rose);
+    color: #fff;
+    border: none;
+    border-radius: 11px;
+    padding: 11px 16px;
+    font-family: 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 14.5px;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 12px;
+    transition: background 0.15s ease;
+  }
+  .primary-btn:active { background: var(--rose-deep); }
+  .primary-btn.ghost {
+    background: transparent;
+    color: var(--rose-deep);
+    border: 1.5px solid var(--pale);
+  }
+  .primary-btn.ghost:active { background: var(--pale); }
+  .primary-btn:disabled { background: var(--ink-faint); cursor: not-allowed; }
+
+  .add-step-btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    align-items: stretch;
+  }
+  .add-step-btn-row .primary-btn {
+    margin-top: 0;
+    flex: 1;
+  }
+  .remember-btn {
+    flex-shrink: 0;
+    width: 46px;
+    border: 1.5px solid var(--pale);
+    background: var(--cream);
+    border-radius: 11px;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--rose-deep);
+  }
+  .remember-btn:active { background: var(--pale); }
+
+  .routine-btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .routine-btn-row .primary-btn { margin-top: 0; }
+
+  .add-event-wrap { margin: 6px 0 30px; }
+
+  /* ---------- Modal ---------- */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(53, 36, 47, 0.4);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 20;
+  }
+  .modal-backdrop.modal-top {
+    align-items: flex-start;
+    padding: 64px 20px 20px;
+    overflow-y: auto;
+  }
+  .modal-sheet {
+    background: var(--cream);
+    width: 100%;
+    max-width: 460px;
+    border-radius: 22px 22px 0 0;
+    padding: 22px 20px 30px;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: slideup 0.22s ease;
+  }
+  .modal-backdrop.modal-top .modal-sheet {
+    border-radius: 22px;
+    max-height: none;
+    animation: popin 0.2s ease;
+  }
+  @keyframes slideup {
+    from { transform: translateY(24px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes popin {
+    from { transform: translateY(-10px) scale(0.98); opacity: 0; }
+    to { transform: translateY(0) scale(1); opacity: 1; }
+  }
+  .modal-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 20px;
+    color: var(--berry);
+    margin: 0 0 16px;
+  }
+  .modal-close {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+
+  .routine-item {
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 13px 14px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  .routine-name { font-weight: 700; font-size: 14.5px; color: var(--ink); }
+  .routine-meta { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+  .routine-btns { display: flex; gap: 6px; flex-shrink: 0; }
+  .small-btn {
+    border: none;
+    border-radius: 9px;
+    padding: 7px 12px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Manrope', sans-serif;
+  }
+  .small-btn.load { background: var(--pale); color: var(--rose-deep); }
+  .small-btn.load:active { background: var(--rose); color: #fff; }
+  .small-btn.del { background: transparent; color: var(--ink-faint); }
+  .small-btn.del:active { color: #b6425d; }
+
+  .loading-msg, .empty-msg {
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 15px;
+    padding: 20px 0;
+  }
+
+  .example-intro {
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+  .example-preview {
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 4px 14px 2px;
+    margin-bottom: 6px;
+  }
+  .example-preview .startby { margin-bottom: 6px; }
+  .example-preview .startby .time { font-size: 32px; }
+  .example-preview .step-time { font-size: 14px; width: 62px; }
+  .example-preview .step-label { font-size: 13.5px; }
+  .example-preview .step-duration { font-size: 11px; }
+  .example-preview .step-row { padding: 9px 0; }
+  .example-preview .event-node .step-label { font-size: 14.5px; }
+  .example-caption {
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-align: center;
+    margin: 4px 0 18px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--berry);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 16px rgba(94,47,73,0.3);
+    z-index: 40;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .modal-sheet { animation: none; }
+    .toast { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// Standalone storage shim: uses the browser's own localStorage so this works as a
+// plain published website (e.g. GitHub Pages), with no server and no account needed.
+// Data stays only on each visitor's own device/browser — nothing syncs across devices
+// or between people. If this file is ever reopened inside a Claude artifact that
+// already provides window.storage, this shim steps aside and uses that instead.
+if (!window.storage) {
+  (function() {
+    var PREFIX = 'girltime:';
+    window.storage = {
+      get: function(key) {
+        try {
+          var raw = localStorage.getItem(PREFIX + key);
+          if (raw === null) return Promise.reject(new Error('not found'));
+          return Promise.resolve({ key: key, value: raw, shared: false });
+        } catch (e) { return Promise.reject(e); }
+      },
+      set: function(key, value) {
+        try {
+          localStorage.setItem(PREFIX + key, value);
+          return Promise.resolve({ key: key, value: value, shared: false });
+        } catch (e) { return Promise.reject(e); }
+      },
+      delete: function(key) {
+        try {
+          localStorage.removeItem(PREFIX + key);
+          return Promise.resolve({ key: key, deleted: true, shared: false });
+        } catch (e) { return Promise.reject(e); }
+      },
+      list: function(prefix) {
+        try {
+          var keys = [];
+          for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k.indexOf(PREFIX) === 0) {
+              var stripped = k.slice(PREFIX.length);
+              if (!prefix || stripped.indexOf(prefix) === 0) keys.push(stripped);
+            }
+          }
+          return Promise.resolve({ keys: keys, prefix: prefix, shared: false });
+        } catch (e) { return Promise.reject(e); }
+      }
+    };
+  })();
+}
+(function() {
+  var state = {
+    events: [],       // [{ id, name, time, steps: [{id,label,hours,minutes}] }]
+    loaded: false,
+    modal: null,       // 'save' | 'routines' | 'emoji' | 'example' | 'confirm-reset' | 'edit-step'
+    modalEventId: null,
+    modalStepId: null,
+    routines: [],
+    saveNameInput: '',
+    stepMemory: {}     // { normalizedLabel: {hours, minutes} } — remembered durations per step label
+  };
+
+  var STORAGE_KEY_SESSION = 'session';
+  var STORAGE_KEY_ROUTINES = 'routines';
+  var STORAGE_KEY_STEP_MEMORY = 'stepMemory';
+  var saveTimer = null;
+  var idCounter = 1;
+  var undoStack = [];
+  var MAX_UNDO = 20;
+
+  function uid() { return 's' + (idCounter++) + '_' + Math.random().toString(36).slice(2, 7); }
+
+  function makeBlankEvent() {
+    return { id: uid(), name: '', time: '', steps: [] };
+  }
+
+  // ---------- time helpers ----------
+  function timeStrToMinutes(t) {
+    if (!t) return null;
+    var parts = t.split(':');
+    return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+  }
+  function minutesToClock(mins) {
+    var m = ((mins % 1440) + 1440) % 1440;
+    var h = Math.floor(m / 60);
+    var mm = m % 60;
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12;
+    if (h12 === 0) h12 = 12;
+    return h12 + ':' + (mm < 10 ? '0' : '') + mm + ' ' + ampm;
+  }
+  function durLabel(h, m) {
+    var parts = [];
+    if (h) parts.push(h + 'h');
+    if (m) parts.push(m + 'm');
+    if (!parts.length) parts.push('0m');
+    return parts.join(' ');
+  }
+
+  var STEP_EMOJI_RULES = [
+    [['shower', 'bath'], '🚿'],
+    [['brush teeth', 'teeth'], '🪥'],
+    [['skincare', 'moistur'], '🧴'],
+    [['makeup', 'mascara'], '💄'],
+    [['hair', 'blow dry', 'curl'], '💇'],
+    [['dress', 'outfit', 'clothes', 'change'], '👗'],
+    [['shoes'], '👟'],
+    [['iron'], '👔'],
+    [['pack', 'bag'], '🎒'],
+    [['breakfast', 'lunch', 'dinner', 'eat', 'meal', 'cook'], '🍳'],
+    [['coffee', 'tea'], '☕'],
+    [['medicine', 'meds', 'vitamin'], '💊'],
+    [['workout', 'gym', 'exercise', 'run'], '🏋️'],
+    [['yoga', 'stretch', 'meditat'], '🧘'],
+    [['walk dog', 'dog', 'pet', 'cat'], '🐶'],
+    [['kids', 'school', 'drop off'], '🧒'],
+    [['clean', 'tidy', 'dishes', 'laundry'], '🧹'],
+    [['email', 'work', 'laptop', 'call'], '💻'],
+    [['charge', 'phone', 'battery'], '🔋'],
+    [['gas', 'fuel'], '⛽'],
+    [['park'], '🅿️'],
+    [['traffic', 'wait', 'buffer'], '⏳'],
+    [['security', 'airport', 'check in', 'check-in'], '🛂'],
+    [['flight', 'plane', 'fly'], '✈️'],
+    [['train', 'subway', 'metro'], '🚆'],
+    [['bus'], '🚌'],
+    [['bike', 'cycle'], '🚲'],
+    [['uber', 'lyft', 'taxi', 'cab', 'ride'], '🚕'],
+    [['walk'], '🚶'],
+    [['drive', 'car'], '🚗'],
+    [['piano', 'practice', 'lesson', 'instrument'], '🎹'],
+    [['party', 'celebrat'], '🎉']
+  ];
+  var DEFAULT_STEP_EMOJI = '⏰';
+
+  function guessStepEmoji(label) {
+    if (!label) return DEFAULT_STEP_EMOJI;
+    var lower = label.toLowerCase();
+    for (var i = 0; i < STEP_EMOJI_RULES.length; i++) {
+      var keywords = STEP_EMOJI_RULES[i][0];
+      for (var j = 0; j < keywords.length; j++) {
+        if (lower.indexOf(keywords[j]) !== -1) return STEP_EMOJI_RULES[i][1];
+      }
+    }
+    return DEFAULT_STEP_EMOJI;
+  }
+
+  var EMOJI_LIST = ['🎉','🍽️','🎂','💐','❤️','☕','🎬','🎵','✈️','🚗','💼','🏋️','🧘','⚽','🎓','🏠','🛍️','📷','🍷','🌅','🏖️','🩺','📅','✨'];
+
+  function currentEmoji(name) {
+    if (!name) return null;
+    for (var i = 0; i < EMOJI_LIST.length; i++) {
+      if (name.indexOf(EMOJI_LIST[i]) === 0) return EMOJI_LIST[i];
+    }
+    return null;
+  }
+
+  function setEventEmoji(eventId, emoji) {
+    var ev = findEvent(eventId);
+    if (!ev) return;
+    var existing = currentEmoji(ev.name);
+    var rest = existing ? ev.name.slice(existing.length).trim() : (ev.name || '').trim();
+    ev.name = (emoji + (rest ? ' ' + rest : '')).trim();
+    debounceSaveSession();
+    state.modal = null;
+    render();
+  }
+
+  function findEvent(eventId) {
+    for (var i = 0; i < state.events.length; i++) {
+      if (state.events[i].id === eventId) return state.events[i];
+    }
+    return null;
+  }
+
+  function computeSchedule(eventTimeStr, stepsArr) {
+    var eventMin = timeStrToMinutes(eventTimeStr);
+    if (eventMin === null) return { rows: [], startOverall: null, valid: false };
+    var cursor = eventMin;
+    var rows = new Array(stepsArr.length);
+    for (var i = stepsArr.length - 1; i >= 0; i--) {
+      var s = stepsArr[i];
+      var dur = (s.hours || 0) * 60 + (s.minutes || 0);
+      var end = cursor;
+      var start = cursor - dur;
+      rows[i] = { id: s.id || ('ex' + i), label: s.label, hours: s.hours, minutes: s.minutes, start: start, end: end, emoji: guessStepEmoji(s.label) };
+      cursor = start;
+    }
+    return { rows: rows, startOverall: cursor, eventMin: eventMin, valid: true };
+  }
+
+  var EXAMPLE_EVENT = {
+    name: 'dinner with grace',
+    time: '19:00',
+    steps: [
+      { label: 'drive from gym to home', hours: 0, minutes: 10 },
+      { label: 'shower', hours: 0, minutes: 30 },
+      { label: 'get dressed', hours: 0, minutes: 10 },
+      { label: 'drive', hours: 0, minutes: 30 },
+      { label: 'park', hours: 0, minutes: 5 }
+    ]
+  };
+
+  function renderTimelineHTML(sched, eventName, interactive, eventId) {
+    var html = '<div class="timeline">';
+    if (!sched.rows.length) {
+      html += '<div class="empty-note">No steps yet — add your first one below (like "shower" or "drive"). Drag the handle to reorder anytime.</div>';
+    } else {
+      sched.rows.forEach(function(row) {
+        html += '<div class="step-row" data-emoji="' + esc(row.emoji) + '" data-event="' + eventId + '" data-id="' + row.id + '">';
+        html += '  <div class="step-time">' + minutesToClock(row.start) + '</div>';
+        if (interactive) {
+          html += '  <div class="step-info" data-action="edit-step" data-event="' + eventId + '" data-id="' + row.id + '"><div class="step-label">' + esc(row.label) + ' <span class="edit-hint">&#9998;</span></div>';
+        } else {
+          html += '  <div class="step-info"><div class="step-label">' + esc(row.label) + '</div>';
+        }
+        html += '  <div class="step-duration">' + durLabel(row.hours, row.minutes) + ' · until ' + minutesToClock(row.end) + '</div></div>';
+        if (interactive) {
+          html += '  <div class="step-actions">';
+          html += '    <button class="icon-btn delete" data-action="delete-step" data-event="' + eventId + '" data-id="' + row.id + '" title="Remove">&times;</button>';
+          html += '    <span class="icon-btn drag-handle" title="Drag to reorder">&#9776;</span>';
+          html += '  </div>';
+        }
+        html += '</div>';
+      });
+    }
+    html += '<div class="event-node">';
+    html += '  <div class="step-time">' + minutesToClock(sched.eventMin) + '</div>';
+    html += '  <div class="step-info"><div class="step-label">' + esc(eventName || 'Your event') + '</div>';
+    html += '  <div class="step-duration">this is what you\'re working backward from</div></div>';
+    html += '</div>';
+    html += '</div>'; // .timeline
+    return html;
+  }
+
+  // ---------- storage ----------
+  function debounceSaveSession() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function() {
+      try {
+        window.storage.set(STORAGE_KEY_SESSION, JSON.stringify({
+          events: state.events
+        }), false).catch(function(e) { console.error('session save failed', e); });
+      } catch (e) { console.error('session save error', e); }
+    }, 350);
+  }
+
+  function loadInitial() {
+    Promise.allSettled ? loadInitialModern() : loadInitialFallback();
+  }
+
+  function applySessionData(parsed) {
+    if (parsed && parsed.events && parsed.events.length) {
+      state.events = parsed.events.map(function(ev) {
+        return {
+          id: ev.id || uid(),
+          name: ev.name || '',
+          time: ev.time || '',
+          steps: (ev.steps || []).map(function(s) {
+            return { id: s.id || uid(), label: s.label, hours: s.hours || 0, minutes: s.minutes || 0 };
+          })
+        };
+      });
+    } else {
+      state.events = [makeBlankEvent()];
+    }
+  }
+
+  function loadInitialModern() {
+    Promise.allSettled([
+      safeGet(STORAGE_KEY_SESSION),
+      safeGet(STORAGE_KEY_ROUTINES),
+      safeGet(STORAGE_KEY_STEP_MEMORY)
+    ]).then(function(results) {
+      var sessionRes = results[0];
+      var routinesRes = results[1];
+      var memRes = results[2];
+      var parsed = null;
+      if (sessionRes.status === 'fulfilled' && sessionRes.value) {
+        try { parsed = JSON.parse(sessionRes.value); } catch (e) { console.error('parse session failed', e); }
+      }
+      applySessionData(parsed);
+      if (routinesRes.status === 'fulfilled' && routinesRes.value) {
+        try { state.routines = JSON.parse(routinesRes.value) || []; }
+        catch (e) { console.error('parse routines failed', e); }
+      }
+      if (memRes.status === 'fulfilled' && memRes.value) {
+        try { state.stepMemory = JSON.parse(memRes.value) || {}; }
+        catch (e) { console.error('parse step memory failed', e); }
+      }
+      state.loaded = true;
+      render();
+    });
+  }
+
+  function loadInitialFallback() {
+    var parsed = null;
+    safeGet(STORAGE_KEY_SESSION).then(function(v) {
+      if (v) { try { parsed = JSON.parse(v); } catch (e) {} }
+      return safeGet(STORAGE_KEY_ROUTINES);
+    }).then(function(v) {
+      applySessionData(parsed);
+      if (v) { try { state.routines = JSON.parse(v) || []; } catch (e) {} }
+      return safeGet(STORAGE_KEY_STEP_MEMORY);
+    }).then(function(v) {
+      if (v) { try { state.stepMemory = JSON.parse(v) || {}; } catch (e) {} }
+      state.loaded = true;
+      render();
+    });
+  }
+
+  function safeGet(key) {
+    try {
+      return window.storage.get(key, false).then(function(res) {
+        return res ? res.value : null;
+      }).catch(function() { return null; });
+    } catch (e) { return Promise.resolve(null); }
+  }
+
+  function saveRoutines() {
+    try {
+      return window.storage.set(STORAGE_KEY_ROUTINES, JSON.stringify(state.routines), false);
+    } catch (e) { console.error(e); return Promise.reject(e); }
+  }
+
+  function normalizeLabel(label) {
+    return (label || '').trim().toLowerCase();
+  }
+
+  function recordStepMemory(label, hours, minutes) {
+    var key = normalizeLabel(label);
+    if (!key) return;
+    state.stepMemory[key] = { hours: hours || 0, minutes: minutes || 0 };
+    saveStepMemory();
+  }
+
+  function saveStepMemory() {
+    try {
+      window.storage.set(STORAGE_KEY_STEP_MEMORY, JSON.stringify(state.stepMemory), false)
+        .catch(function(e) { console.error('step memory save failed', e); });
+    } catch (e) { console.error('step memory save error', e); }
+  }
+
+  // ---------- undo / reset ----------
+  function snapshotState() {
+    undoStack.push(JSON.stringify(state.events));
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+  }
+
+  function undo() {
+    if (!undoStack.length) { showToast('Nothing to undo'); return; }
+    try {
+      state.events = JSON.parse(undoStack.pop());
+      debounceSaveSession();
+      showToast('Undone');
+      render();
+    } catch (e) { console.error('undo failed', e); }
+  }
+
+  function resetAll() {
+    snapshotState();
+    state.events = [makeBlankEvent()];
+    state.modal = null;
+    debounceSaveSession();
+    showToast('Started over');
+    render();
+  }
+
+  // ---------- actions ----------
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function() { t.classList.remove('show'); }, 1800);
+  }
+
+  function addEvent() {
+    snapshotState();
+    state.events.push(makeBlankEvent());
+    debounceSaveSession();
+    render();
+    // scroll to the new event card
+    var sections = document.querySelectorAll('.event-section');
+    var last = sections[sections.length - 1];
+    if (last) last.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function removeEvent(eventId) {
+    snapshotState();
+    var ev = findEvent(eventId);
+    state.events = state.events.filter(function(e) { return e.id !== eventId; });
+    debounceSaveSession();
+    showToast(ev && ev.name ? '"' + ev.name + '" removed' : 'Event removed');
+    render();
+  }
+
+  function addStep(eventId, label, hours, minutes) {
+    var ev = findEvent(eventId);
+    if (!ev) return;
+    if (!label.trim()) return;
+    if (!hours && !minutes) return;
+    snapshotState();
+    var newStep = { id: uid(), label: label.trim(), hours: hours || 0, minutes: minutes || 0 };
+    ev.steps.push(newStep);
+    recordStepMemory(newStep.label, newStep.hours, newStep.minutes);
+    debounceSaveSession();
+    render();
+  }
+
+  function editStep(eventId, stepId, label, hours, minutes) {
+    var ev = findEvent(eventId);
+    if (!ev) return;
+    if (!label.trim()) return;
+    if (!hours && !minutes) return;
+    var step = ev.steps.find(function(s) { return s.id === stepId; });
+    if (!step) return;
+    snapshotState();
+    step.label = label.trim();
+    step.hours = hours || 0;
+    step.minutes = minutes || 0;
+    recordStepMemory(step.label, step.hours, step.minutes);
+    state.modal = null;
+    debounceSaveSession();
+    showToast('Step updated');
+    render();
+  }
+
+  function deleteStep(eventId, stepId) {
+    var ev = findEvent(eventId);
+    if (!ev) return;
+    snapshotState();
+    ev.steps = ev.steps.filter(function(s) { return s.id !== stepId; });
+    debounceSaveSession();
+    render();
+  }
+
+  function reorderStep(eventId, stepId, newIndex) {
+    var ev = findEvent(eventId);
+    if (!ev) return;
+    var idx = ev.steps.findIndex(function(s) { return s.id === stepId; });
+    if (idx === -1) return;
+    newIndex = Math.max(0, Math.min(newIndex, ev.steps.length - 1));
+    if (idx === newIndex) return;
+    snapshotState();
+    var moved = ev.steps.splice(idx, 1)[0];
+    ev.steps.splice(newIndex, 0, moved);
+    debounceSaveSession();
+    render();
+  }
+
+  function saveAsRoutine(eventId, name) {
+    if (!name.trim()) return;
+    var ev = findEvent(eventId);
+    if (!ev || !ev.steps.length) { showToast("Add a step first"); return; }
+    var routine = {
+      id: uid(),
+      name: name.trim(),
+      steps: ev.steps.map(function(s) { return { label: s.label, hours: s.hours, minutes: s.minutes }; })
+    };
+    state.routines.unshift(routine);
+    saveRoutines().then(function() {
+      showToast('Saved "' + routine.name + '"');
+    }).catch(function() { showToast('Could not save'); });
+    state.modal = null;
+    render();
+  }
+
+  function loadRoutine(eventId, routineId) {
+    var ev = findEvent(eventId);
+    var r = state.routines.find(function(x) { return x.id === routineId; });
+    if (!ev || !r) return;
+    snapshotState();
+    ev.steps = r.steps.map(function(s) { return { id: uid(), label: s.label, hours: s.hours, minutes: s.minutes }; });
+    state.modal = null;
+    debounceSaveSession();
+    showToast('Loaded "' + r.name + '"');
+    render();
+  }
+
+  function deleteRoutine(id) {
+    state.routines = state.routines.filter(function(r) { return r.id !== id; });
+    saveRoutines().catch(function() {});
+    render();
+  }
+
+  // ---------- render ----------
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function render() {
+    var app = document.getElementById('app');
+    if (!state.loaded) {
+      app.innerHTML = '<div class="wordmark-row"><span class="wordmark">girl <span>time</span></span></div><div class="loading-msg">getting your schedule ready…</div>';
+      return;
+    }
+
+    var html = '';
+
+    html += '<div class="header-row">';
+    html += '  <div><div class="wordmark-row"><h1 class="wordmark">girl <span>time</span></h1></div>';
+    html += '  <div class="tagline">work backward from any event to know exactly when to start</div></div>';
+    html += '  <div class="header-links">';
+    html += '    <button class="routines-link" data-action="open-example">how it works</button>';
+    html += '  </div>';
+    html += '</div>';
+
+    if (!state.events.length) {
+      html += '<div class="empty-msg">No events yet — add one below.</div>';
+    }
+
+    state.events.forEach(function(ev, idx) {
+      var sched = computeSchedule(ev.time, ev.steps);
+      html += '<div class="event-section">';
+
+      // overlap warning: compare against the previous event in the list
+      if (idx > 0 && sched.valid) {
+        var prev = state.events[idx - 1];
+        var prevMin = timeStrToMinutes(prev.time);
+        if (prevMin !== null && prevMin <= sched.eventMin && sched.startOverall < prevMin) {
+          html += '<div class="warning-banner"><span class="glyph">&#9888;&#65039;</span><span>Heads up — getting ready for ' +
+            esc(ev.name || 'this event') + ' would need to start at ' + minutesToClock(sched.startOverall) +
+            ', before ' + esc(prev.name || 'your previous event') + ' at ' + minutesToClock(prevMin) +
+            '. You may not have enough time in between.</span></div>';
+        }
+      }
+
+      html += '<div class="event-card-header">';
+      html += '  <button class="routines-link" data-action="open-routines" data-event="' + ev.id + '" style="padding-left:0;white-space:normal;">my saved routines/events</button>';
+      html += '  <div class="utility-row">';
+      html += '    <button class="utility-btn undo" data-action="undo"' + (undoStack.length ? '' : ' disabled') + '>&#8634; undo</button>';
+      html += '    <button class="utility-btn reset" data-action="open-reset-confirm">start over</button>';
+      html += '  </div>';
+      html += '</div>';
+
+      html += '<div class="event-card">';
+      if (state.events.length > 1) {
+        html += '  <div class="event-card-remove-row"><button class="remove-event-link" data-action="remove-event" data-event="' + ev.id + '">remove</button></div>';
+      }
+      html += '  <label class="field-label" for="eventName-' + ev.id + '">new event/routine' + (state.events.length > 1 ? ' ' + (idx + 1) : '') + '</label>';
+      html += '  <div class="event-inputs">';
+      html += '    <button class="emoji-btn" type="button" data-action="open-emoji" data-event="' + ev.id + '" title="Add an emoji">' + (currentEmoji(ev.name) || '&#128578;') + '</button>';
+      html += '    <div class="event-name-field"><input type="text" id="eventName-' + ev.id + '" data-event="' + ev.id + '" placeholder="e.g. dinner with Grace" value="' + esc(ev.name) + '"></div>';
+      html += '    <div class="event-time-field"><input type="time" id="eventTime-' + ev.id + '" data-event="' + ev.id + '" value="' + esc(ev.time) + '"></div>';
+      html += '  </div>';
+      html += '</div>';
+
+      html += '<div class="add-step-card">';
+      html += '  <div class="add-step-title-row"><div class="add-step-title">add steps</div></div>';
+      html += '  <div class="add-step-row1">';
+      html += '    <label class="field-label" for="stepLabel-' + ev.id + '">label</label>';
+      html += '    <input type="text" id="stepLabel-' + ev.id + '" placeholder="e.g. drive, shower, get dressed">';
+      html += '    <div class="step-hint" id="stepHint-' + ev.id + '" style="display:none;"></div>';
+      html += '  </div>';
+      html += '  <div class="add-step-row2">';
+      html += '    <div class="dur-field"><label class="field-label" for="stepHours-' + ev.id + '">hours</label><input type="number" id="stepHours-' + ev.id + '" min="0" max="23" placeholder="0"></div>';
+      html += '    <div class="dur-field"><label class="field-label" for="stepMinutes-' + ev.id + '">minutes</label><input type="number" id="stepMinutes-' + ev.id + '" min="0" max="59" placeholder="0"></div>';
+      html += '  </div>';
+      html += '  <div class="add-step-btn-row">';
+      html += '    <button class="primary-btn" data-action="add-step" data-event="' + ev.id + '"' + (sched.valid ? '' : ' disabled') + '>+ add step</button>';
+      html += '    <button class="remember-btn" type="button" data-action="remember-only" data-event="' + ev.id + '" title="Remember this duration without adding a step">&#128190;</button>';
+      html += '  </div>';
+      html += '</div>';
+
+      if (sched.valid) {
+        html += '<div class="startby">';
+        html += '  <div class="eyebrow">start by</div>';
+        html += '  <div class="time">' + minutesToClock(sched.startOverall) + '</div>';
+        html += '</div>';
+        html += renderTimelineHTML(sched, ev.name, true, ev.id);
+      } else {
+        html += '<div class="empty-msg">Set an event time above to start building this schedule.</div>';
+      }
+
+      html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '" style="margin-top:6px;">save this routine</button>';
+
+      html += '</div>'; // .event-section
+    });
+
+    // "+ add another event" button removed for now — addEvent() still works if re-enabled later
+
+    if (state.modal === 'routines') {
+      html += renderRoutinesModal();
+    } else if (state.modal === 'save') {
+      html += renderSaveModal();
+    } else if (state.modal === 'emoji') {
+      html += renderEmojiModal();
+    } else if (state.modal === 'example') {
+      html += renderExampleModal();
+    } else if (state.modal === 'confirm-reset') {
+      html += renderResetConfirmModal();
+    } else if (state.modal === 'edit-step') {
+      html += renderEditStepModal();
+    }
+
+    app.innerHTML = html;
+    attachHandlers();
+  }
+
+  function renderRoutinesModal() {
+    var evId = state.modalEventId;
+    var ev = findEvent(evId);
+    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    html += '<div class="modal-sheet" onclick="event.stopPropagation()">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">my saved routines/events</div>';
+    if (!state.routines.length) {
+      html += '<div class="empty-msg">No saved routines yet. Build a schedule, then tap "save this routine".</div>';
+    } else {
+      state.routines.forEach(function(r) {
+        var totalMin = r.steps.reduce(function(sum, s) { return sum + (s.hours||0)*60 + (s.minutes||0); }, 0);
+        html += '<div class="routine-item">';
+        html += '  <div><div class="routine-name">' + esc(r.name) + '</div>';
+        html += '  <div class="routine-meta">' + r.steps.length + ' step' + (r.steps.length === 1 ? '' : 's') + ' · ' + durLabel(Math.floor(totalMin/60), totalMin%60) + ' total</div></div>';
+        html += '  <div class="routine-btns">';
+        html += '    <button class="small-btn load" data-action="load-routine" data-event="' + evId + '" data-id="' + r.id + '">load</button>';
+        html += '    <button class="small-btn del" data-action="delete-routine" data-id="' + r.id + '">delete</button>';
+        html += '  </div>';
+        html += '</div>';
+      });
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderEditStepModal() {
+    var evId = state.modalEventId;
+    var ev = findEvent(evId);
+    var step = ev ? ev.steps.find(function(s) { return s.id === state.modalStepId; }) : null;
+    if (!step) return '';
+    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    html += '<div class="modal-sheet" onclick="event.stopPropagation()">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">edit step</div>';
+    html += '<div class="add-step-row1">';
+    html += '  <label class="field-label" for="editStepLabel">label</label>';
+    html += '  <input type="text" id="editStepLabel" value="' + esc(step.label) + '">';
+    html += '  <div class="step-hint" id="editStepHint" style="display:none;"></div>';
+    html += '</div>';
+    html += '<div class="add-step-row2">';
+    html += '  <div class="dur-field"><label class="field-label" for="editStepHours">hours</label><input type="number" id="editStepHours" min="0" max="23" value="' + step.hours + '"></div>';
+    html += '  <div class="dur-field"><label class="field-label" for="editStepMinutes">minutes</label><input type="number" id="editStepMinutes" min="0" max="59" value="' + step.minutes + '"></div>';
+    html += '</div>';
+    html += '<button class="primary-btn" data-action="confirm-edit-step" data-event="' + evId + '" data-id="' + step.id + '">save changes</button>';
+    html += '<button class="primary-btn ghost" data-action="delete-step-from-modal" data-event="' + evId + '" data-id="' + step.id + '" style="margin-top:8px;">remove this step</button>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderSaveModal() {
+    var evId = state.modalEventId;
+    var ev = findEvent(evId);
+    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    html += '<div class="modal-sheet" onclick="event.stopPropagation()">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">save as a routine</div>';
+    html += '<label class="field-label" for="routineName">name it</label>';
+    html += '<input type="text" id="routineName" placeholder="e.g. date night, gym morning" value="' + esc(state.saveNameInput) + '">';
+    html += '<button class="primary-btn" data-action="confirm-save" data-event="' + evId + '">save routine</button>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderEmojiModal() {
+    var evId = state.modalEventId;
+    var ev = findEvent(evId);
+    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    html += '<div class="modal-sheet" onclick="event.stopPropagation()">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">add an emoji</div>';
+    html += '<div class="emoji-grid">';
+    EMOJI_LIST.forEach(function(em) {
+      html += '<button class="emoji-cell" data-action="pick-emoji" data-event="' + evId + '" data-emoji="' + em + '">' + em + '</button>';
+    });
+    html += '</div>';
+    if (ev && currentEmoji(ev.name)) {
+      html += '<button class="primary-btn ghost" data-action="clear-emoji" data-event="' + evId + '" style="margin-top:14px;">remove emoji</button>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderResetConfirmModal() {
+    var html = '<div class="modal-backdrop modal-top" data-action="close-modal">';
+    html += '<div class="modal-sheet" onclick="event.stopPropagation()">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">start over?</div>';
+    html += '<div class="warning-text">This clears every event, name, time, and step you\'ve set up. Your saved routines won\'t be touched, and you can still undo this right after.</div>';
+    html += '<button class="primary-btn danger" data-action="confirm-reset">yes, start over</button>';
+    html += '<button class="primary-btn ghost" data-action="close-modal" style="margin-top:8px;">cancel</button>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderExampleModal() {
+    var exSched = computeSchedule(EXAMPLE_EVENT.time, EXAMPLE_EVENT.steps);
+    var html = '<div class="modal-backdrop modal-top" data-action="close-modal">';
+    html += '<div class="modal-sheet" onclick="event.stopPropagation()">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">how it works</div>';
+    html += '<div class="example-intro">Set an event time, then add the steps that lead up to it — shower, drive, whatever it takes. Each step stacks further back, so you always know your "start by" time. Here\'s an example:</div>';
+    html += '<div class="example-preview">';
+    html += '  <div class="startby"><div class="eyebrow">start by</div><div class="time">' + minutesToClock(exSched.startOverall) + '</div></div>';
+    html += renderTimelineHTML(exSched, EXAMPLE_EVENT.name, false, 'example');
+    html += '</div>';
+    html += '<div class="example-caption">a 7:00 PM dinner means starting to get ready at ' + minutesToClock(exSched.startOverall) + '</div>';
+    html += '<button class="primary-btn" data-action="try-example">try this example</button>';
+    html += '<button class="primary-btn ghost" data-action="close-modal" style="margin-top:8px;">got it, close</button>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function attachHandlers() {
+    var app = document.getElementById('app');
+
+    state.events.forEach(function(ev) {
+      var nameEl = document.getElementById('eventName-' + ev.id);
+      if (nameEl) nameEl.addEventListener('input', function(e) {
+        ev.name = e.target.value;
+        debounceSaveSession();
+        var section = nameEl.closest('.event-section');
+        var lbl = section && section.querySelector('.event-node .step-label');
+        if (lbl) lbl.textContent = ev.name || 'Your event';
+      });
+
+      var timeEl = document.getElementById('eventTime-' + ev.id);
+      if (timeEl) timeEl.addEventListener('input', function(e) {
+        ev.time = e.target.value;
+        debounceSaveSession();
+        render();
+        var again = document.getElementById('eventTime-' + ev.id);
+        if (again) again.focus();
+      });
+
+      wireStepHint(
+        document.getElementById('stepLabel-' + ev.id),
+        document.getElementById('stepHours-' + ev.id),
+        document.getElementById('stepMinutes-' + ev.id),
+        document.getElementById('stepHint-' + ev.id)
+      );
+    });
+
+    wireStepHint(
+      document.getElementById('editStepLabel'),
+      document.getElementById('editStepHours'),
+      document.getElementById('editStepMinutes'),
+      document.getElementById('editStepHint')
+    );
+
+    var routineNameEl = document.getElementById('routineName');
+    if (routineNameEl) {
+      routineNameEl.addEventListener('input', function(e) { state.saveNameInput = e.target.value; });
+      routineNameEl.focus();
+      routineNameEl.select();
+    }
+
+    var editLabelEl = document.getElementById('editStepLabel');
+    if (editLabelEl) { editLabelEl.focus(); editLabelEl.select(); }
+  }
+
+  function wireStepHint(labelEl, hoursEl, minutesEl, hintEl) {
+    if (!labelEl || !hintEl) return;
+    labelEl.addEventListener('input', function(e) {
+      var mem = state.stepMemory[normalizeLabel(e.target.value)];
+      if (mem && (mem.hours || mem.minutes)) {
+        hintEl.style.display = 'inline-block';
+        hintEl.textContent = '💡 usually ' + durLabel(mem.hours, mem.minutes) + ' — tap to use';
+        hintEl.onclick = function() {
+          if (hoursEl) hoursEl.value = mem.hours || '';
+          if (minutesEl) minutesEl.value = mem.minutes || '';
+        };
+      } else {
+        hintEl.style.display = 'none';
+      }
+    });
+  }
+
+  function onClick(e) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var action = btn.getAttribute('data-action');
+    var id = btn.getAttribute('data-id');
+    var eventId = btn.getAttribute('data-event');
+
+    if (action === 'add-step') {
+      var label = document.getElementById('stepLabel-' + eventId).value;
+      var hours = parseInt(document.getElementById('stepHours-' + eventId).value, 10) || 0;
+      var minutes = parseInt(document.getElementById('stepMinutes-' + eventId).value, 10) || 0;
+      addStep(eventId, label, hours, minutes);
+    } else if (action === 'remember-only') {
+      var rLabel = document.getElementById('stepLabel-' + eventId).value;
+      var rHours = parseInt(document.getElementById('stepHours-' + eventId).value, 10) || 0;
+      var rMinutes = parseInt(document.getElementById('stepMinutes-' + eventId).value, 10) || 0;
+      if (!rLabel.trim()) { showToast('Type a label first'); }
+      else if (!rHours && !rMinutes) { showToast('Set an hours or minutes value first'); }
+      else {
+        recordStepMemory(rLabel, rHours, rMinutes);
+        showToast('Remembered "' + rLabel.trim() + '" → ' + durLabel(rHours, rMinutes));
+      }
+    } else if (action === 'delete-step') {
+      deleteStep(eventId, id);
+    } else if (action === 'edit-step') {
+      state.modal = 'edit-step';
+      state.modalEventId = eventId;
+      state.modalStepId = id;
+      render();
+    } else if (action === 'confirm-edit-step') {
+      var editLabel = document.getElementById('editStepLabel').value;
+      var editHours = parseInt(document.getElementById('editStepHours').value, 10) || 0;
+      var editMinutes = parseInt(document.getElementById('editStepMinutes').value, 10) || 0;
+      editStep(eventId, id, editLabel, editHours, editMinutes);
+    } else if (action === 'delete-step-from-modal') {
+      state.modal = null;
+      deleteStep(eventId, id);
+    } else if (action === 'add-event') {
+      addEvent();
+    } else if (action === 'remove-event') {
+      removeEvent(eventId);
+    } else if (action === 'open-routines') {
+      state.modal = 'routines';
+      state.modalEventId = eventId;
+      render();
+    } else if (action === 'open-save') {
+      state.modal = 'save';
+      state.modalEventId = eventId;
+      state.saveNameInput = (findEvent(eventId) || {}).name || '';
+      render();
+    } else if (action === 'open-example') {
+      state.modal = 'example';
+      render();
+    } else if (action === 'try-example') {
+      snapshotState();
+      state.events.push({
+        id: uid(),
+        name: EXAMPLE_EVENT.name,
+        time: EXAMPLE_EVENT.time,
+        steps: EXAMPLE_EVENT.steps.map(function(s) { return { id: uid(), label: s.label, hours: s.hours, minutes: s.minutes }; })
+      });
+      state.modal = null;
+      debounceSaveSession();
+      showToast('Added the example as a new event — try editing it!');
+      render();
+    } else if (action === 'undo') {
+      undo();
+    } else if (action === 'open-reset-confirm') {
+      state.modal = 'confirm-reset';
+      render();
+    } else if (action === 'confirm-reset') {
+      resetAll();
+    } else if (action === 'open-emoji') {
+      state.modal = 'emoji';
+      state.modalEventId = eventId;
+      render();
+    } else if (action === 'pick-emoji') {
+      setEventEmoji(eventId, btn.getAttribute('data-emoji'));
+    } else if (action === 'clear-emoji') {
+      var ev2 = findEvent(eventId);
+      if (ev2) {
+        var existing = currentEmoji(ev2.name);
+        ev2.name = existing ? ev2.name.slice(existing.length).trim() : ev2.name;
+        debounceSaveSession();
+      }
+      state.modal = null;
+      render();
+    } else if (action === 'close-modal') {
+      state.modal = null;
+      render();
+    } else if (action === 'confirm-save') {
+      var nm = document.getElementById('routineName').value;
+      saveAsRoutine(eventId, nm);
+    } else if (action === 'load-routine') {
+      loadRoutine(eventId, id);
+    } else if (action === 'delete-routine') {
+      deleteRoutine(id);
+    }
+  }
+
+  // ---------- drag-to-reorder ----------
+  var dragState = null;
+
+  function onDragStart(e) {
+    var handle = e.target.closest('.drag-handle');
+    if (!handle) return;
+    var rowEl = handle.closest('.step-row');
+    if (!rowEl) return;
+    var eventId = rowEl.getAttribute('data-event');
+    var stepId = rowEl.getAttribute('data-id');
+    var ev = findEvent(eventId);
+    if (!ev) return;
+    var startIndex = ev.steps.findIndex(function(s) { return s.id === stepId; });
+    if (startIndex === -1) return;
+
+    var container = rowEl.parentElement;
+    var siblingEls = Array.prototype.slice.call(container.querySelectorAll(':scope > .step-row'));
+    var siblingRects = siblingEls.map(function(el) {
+      return { id: el.getAttribute('data-id'), rect: el.getBoundingClientRect() };
+    });
+
+    dragState = {
+      eventId: eventId,
+      stepId: stepId,
+      startIndex: startIndex,
+      rowEl: rowEl,
+      startY: e.clientY,
+      siblingRects: siblingRects
+    };
+
+    rowEl.classList.add('dragging');
+    e.preventDefault();
+    document.addEventListener('pointermove', onDragMove);
+    document.addEventListener('pointerup', onDragEnd);
+    document.addEventListener('pointercancel', onDragEnd);
+  }
+
+  function computeDragTargetIndex(ds) {
+    // rank siblings (excluding the dragged row) by original vertical position,
+    // then find how many of their midpoints the current pointer Y has passed.
+    var others = ds.siblingRects.filter(function(s) { return s.id !== ds.stepId; });
+    others.sort(function(a, b) { return a.rect.top - b.rect.top; });
+    var currentY = ds.lastClientY;
+    var targetIndex = 0;
+    for (var i = 0; i < others.length; i++) {
+      var mid = others[i].rect.top + others[i].rect.height / 2;
+      if (currentY > mid) targetIndex = i + 1;
+    }
+    return targetIndex;
+  }
+
+  function onDragMove(e) {
+    if (!dragState) return;
+    dragState.lastClientY = e.clientY;
+    var deltaY = e.clientY - dragState.startY;
+    dragState.rowEl.style.transform = 'translateY(' + deltaY + 'px)';
+  }
+
+  function onDragEnd(e) {
+    if (!dragState) return;
+    var ds = dragState;
+    document.removeEventListener('pointermove', onDragMove);
+    document.removeEventListener('pointerup', onDragEnd);
+    document.removeEventListener('pointercancel', onDragEnd);
+    ds.rowEl.classList.remove('dragging');
+    ds.rowEl.style.transform = '';
+
+    var targetIndex = ds.startIndex;
+    if (typeof ds.lastClientY === 'number') {
+      targetIndex = computeDragTargetIndex(ds);
+    }
+    dragState = null;
+    reorderStep(ds.eventId, ds.stepId, targetIndex);
+  }
+
+  function init() {
+    var app = document.getElementById('app');
+    app.addEventListener('click', onClick);
+    app.addEventListener('pointerdown', onDragStart);
+    render();
+    loadInitial();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>

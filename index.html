@@ -249,9 +249,6 @@
     -webkit-appearance: none;
     appearance: none;
   }
-  input[type="time"] {
-    -webkit-min-logical-width: 0;
-  }
   input[type="text"]:focus, input[type="time"]:focus, input[type="number"]:focus {
     border-color: var(--rose);
     background: #fff;
@@ -772,8 +769,20 @@ if (!window.storage) {
   // ---------- time helpers ----------
   function timeStrToMinutes(t) {
     if (!t) return null;
-    var parts = t.split(':');
-    return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+    var m = String(t).trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m?\.?)?$/);
+    if (!m) return null;
+    var hour = parseInt(m[1], 10);
+    var minute = m[2] ? parseInt(m[2], 10) : 0;
+    if (minute < 0 || minute > 59) return null;
+    var ampm = m[3] ? m[3].replace(/\./g, '') : null;
+    if (ampm) {
+      if (hour < 1 || hour > 12) return null;
+      var isPM = ampm.charAt(0) === 'p';
+      hour = (hour % 12) + (isPM ? 12 : 0);
+    } else {
+      if (hour < 0 || hour > 23) return null;
+    }
+    return hour * 60 + minute;
   }
   function minutesToClock(mins) {
     var m = ((mins % 1440) + 1440) % 1440;
@@ -1126,6 +1135,8 @@ if (!window.storage) {
     var routine = {
       id: uid(),
       name: name.trim(),
+      eventName: ev.name || '',
+      time: ev.time || '',
       steps: ev.steps.map(function(s) { return { label: s.label, hours: s.hours, minutes: s.minutes }; })
     };
     state.routines.unshift(routine);
@@ -1141,11 +1152,17 @@ if (!window.storage) {
     var r = state.routines.find(function(x) { return x.id === routineId; });
     if (!ev || !r) return;
     snapshotState();
+    ev.name = (r.eventName !== undefined) ? r.eventName : (r.name || ev.name);
+    ev.time = (r.time !== undefined) ? r.time : ev.time;
     ev.steps = r.steps.map(function(s) { return { id: uid(), label: s.label, hours: s.hours, minutes: s.minutes }; });
     state.modal = null;
     debounceSaveSession();
-    showToast('Loaded "' + r.name + '"');
+    showToast('Loaded "' + r.name + '" — ' + ev.steps.length + ' step' + (ev.steps.length === 1 ? '' : 's'));
     render();
+    if (!ev.time) {
+      var timeInput = document.getElementById('eventTime-' + ev.id);
+      if (timeInput) timeInput.focus();
+    }
   }
 
   function deleteRoutine(id) {
@@ -1211,7 +1228,7 @@ if (!window.storage) {
       html += '  <label class="field-label" for="eventName-' + ev.id + '" style="color:var(--berry);">new event/routine' + (state.events.length > 1 ? ' ' + (idx + 1) : '') + '</label>';
       html += '  <div class="event-inputs">';
       html += '    <div class="event-name-field"><input type="text" id="eventName-' + ev.id + '" data-event="' + ev.id + '" placeholder="e.g. dinner with Grace" value="' + esc(ev.name) + '"></div>';
-      html += '    <div class="event-time-field"><input type="time" id="eventTime-' + ev.id + '" data-event="' + ev.id + '" value="' + esc(ev.time) + '"></div>';
+      html += '    <div class="event-time-field"><input type="text" inputmode="text" autocomplete="off" placeholder="e.g. 7:00 PM" id="eventTime-' + ev.id + '" data-event="' + ev.id + '" value="' + esc(ev.time) + '"></div>';
       html += '  </div>';
       html += '</div>';
 
@@ -1238,6 +1255,9 @@ if (!window.storage) {
         html += '  <div class="time">' + minutesToClock(sched.startOverall) + '</div>';
         html += '</div>';
         html += renderTimelineHTML(sched, ev.name, true, ev.id);
+      } else if (ev.steps.length) {
+        html += '<div class="empty-msg">' + ev.steps.length + ' step' + (ev.steps.length === 1 ? '' : 's') +
+          ' loaded — set an event time above to see your schedule.</div>';
       } else {
         html += '<div class="empty-msg">Set an event time above to start building this schedule.</div>';
       }
@@ -1277,9 +1297,11 @@ if (!window.storage) {
     } else {
       state.routines.forEach(function(r) {
         var totalMin = r.steps.reduce(function(sum, s) { return sum + (s.hours||0)*60 + (s.minutes||0); }, 0);
+        var timeMin = r.time ? timeStrToMinutes(r.time) : null;
+        var timeLabel = timeMin !== null ? ' · ' + minutesToClock(timeMin) : '';
         html += '<div class="routine-item">';
         html += '  <div><div class="routine-name">' + esc(r.name) + '</div>';
-        html += '  <div class="routine-meta">' + r.steps.length + ' step' + (r.steps.length === 1 ? '' : 's') + ' · ' + durLabel(Math.floor(totalMin/60), totalMin%60) + ' total</div></div>';
+        html += '  <div class="routine-meta">' + r.steps.length + ' step' + (r.steps.length === 1 ? '' : 's') + ' · ' + durLabel(Math.floor(totalMin/60), totalMin%60) + ' total' + timeLabel + '</div></div>';
         html += '  <div class="routine-btns">';
         html += '    <button class="small-btn load" data-action="load-routine" data-event="' + evId + '" data-id="' + r.id + '">load</button>';
         html += '    <button class="small-btn del" data-action="delete-routine" data-id="' + r.id + '">delete</button>';
@@ -1377,11 +1399,15 @@ if (!window.storage) {
 
       var timeEl = document.getElementById('eventTime-' + ev.id);
       if (timeEl) timeEl.addEventListener('input', function(e) {
+        var cursorPos = e.target.selectionStart;
         ev.time = e.target.value;
         debounceSaveSession();
         render();
         var again = document.getElementById('eventTime-' + ev.id);
-        if (again) again.focus();
+        if (again) {
+          again.focus();
+          try { again.setSelectionRange(cursorPos, cursorPos); } catch (err) {}
+        }
       });
 
       wireStepHint(

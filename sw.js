@@ -1,14 +1,14 @@
 // Simple network-first service worker for "girl time".
 // Bump CACHE_NAME whenever you push an update so old cached copies get cleared out.
-var CACHE_NAME = 'girl-time-v1';
+var CACHE_NAME = 'girl-time-v2';
 var CORE_ASSETS = [
   './',
   './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
-  './icon-192-maskable.png',
-  './icon-512-maskable.png'
+  './manifest.json?v=2',
+  './icon-192.png?v=2',
+  './icon-512.png?v=2',
+  './icon-192-maskable.png?v=2',
+  './icon-512-maskable.png?v=2'
 ];
 
 self.addEventListener('install', function(event) {

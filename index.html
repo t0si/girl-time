@@ -33,6 +33,10 @@
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png?v=2">
 <link rel="apple-touch-icon" href="icon-192.png?v=2">
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500;1,9..144,600&family=Manrope:wght@400;500;600;700;800&display=swap');
 
@@ -715,60 +719,187 @@
 <div class="toast" id="toast"></div>
 
 <script>
-// Standalone storage shim: uses the browser's own localStorage so this works as a
-// plain published website (e.g. GitHub Pages), with no server and no account needed.
-// Data stays only on each visitor's own device/browser — nothing syncs across devices
-// or between people. If this file is ever reopened inside a Claude artifact that
-// already provides window.storage, this shim steps aside and uses that instead.
-if (!window.storage) {
-  (function() {
-    var PREFIX = 'girltime:';
-    window.storage = {
-      get: function(key) {
-        try {
-          var raw = localStorage.getItem(PREFIX + key);
-          if (raw === null) return Promise.reject(new Error('not found'));
-          return Promise.resolve({ key: key, value: raw, shared: false });
-        } catch (e) { return Promise.reject(e); }
-      },
-      set: function(key, value) {
-        try {
-          localStorage.setItem(PREFIX + key, value);
-          return Promise.resolve({ key: key, value: value, shared: false });
-        } catch (e) { return Promise.reject(e); }
-      },
-      delete: function(key) {
-        try {
-          localStorage.removeItem(PREFIX + key);
-          return Promise.resolve({ key: key, deleted: true, shared: false });
-        } catch (e) { return Promise.reject(e); }
-      },
-      list: function(prefix) {
-        try {
-          var keys = [];
-          for (var i = 0; i < localStorage.length; i++) {
-            var k = localStorage.key(i);
-            if (k.indexOf(PREFIX) === 0) {
-              var stripped = k.slice(PREFIX.length);
-              if (!prefix || stripped.indexOf(prefix) === 0) keys.push(stripped);
-            }
-          }
-          return Promise.resolve({ keys: keys, prefix: prefix, shared: false });
-        } catch (e) { return Promise.reject(e); }
-      }
-    };
-  })();
+// ---------- Firebase init ----------
+var firebaseConfig = {
+  apiKey: "AIzaSyCVWt62rdmIiORRJ2SFaLn4a0RPzqcNQPo",
+  authDomain: "girl-time-26c08.firebaseapp.com",
+  projectId: "girl-time-26c08",
+  storageBucket: "girl-time-26c08.firebasestorage.app",
+  messagingSenderId: "185812573107",
+  appId: "1:185812573107:web:9eff7eaa40dd3afc2e49c6"
+};
+var firebaseReady = false;
+try {
+  firebase.initializeApp(firebaseConfig);
+  firebaseReady = true;
+} catch (e) {
+  console.error('Firebase init failed — falling back to local-only storage', e);
 }
+
+// ---------- Auth helpers, exposed globally for the main app script ----------
+window.girlTimeAuth = (function() {
+  var listeners = [];
+  var currentUser = null;
+  var EMAIL_KEY = 'girltime:pendingSignInEmail';
+
+  if (firebaseReady) {
+    firebase.auth().onAuthStateChanged(function(user) {
+      currentUser = user;
+      listeners.forEach(function(fn) { fn(user); });
+    });
+
+    // Completing an email-link sign-in: if we arrived here via the link Firebase emailed,
+    // finish the sign-in and clean the sign-in params out of the URL.
+    if (firebase.auth().isSignInWithEmailLink(window.location.href)) {
+      var email = window.localStorage.getItem(EMAIL_KEY);
+      if (!email) {
+        email = window.prompt('Confirm your email to finish signing in:');
+      }
+      if (email) {
+        firebase.auth().signInWithEmailLink(email, window.location.href).then(function() {
+          window.localStorage.removeItem(EMAIL_KEY);
+          var cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }).catch(function(err) {
+          console.error('email link sign-in failed', err);
+        });
+      }
+    }
+  }
+
+  return {
+    onChange: function(fn) {
+      listeners.push(fn);
+      if (firebaseReady) fn(currentUser);
+    },
+    getUser: function() { return currentUser; },
+    isReady: function() { return firebaseReady; },
+    signInWithGoogle: function() {
+      if (!firebaseReady) return Promise.reject(new Error('Firebase not available'));
+      return firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
+    },
+    sendEmailLink: function(email) {
+      if (!firebaseReady) return Promise.reject(new Error('Firebase not available'));
+      var actionCodeSettings = {
+        url: window.location.origin + window.location.pathname,
+        handleCodeInApp: true
+      };
+      return firebase.auth().sendSignInLinkToEmail(email, actionCodeSettings).then(function() {
+        window.localStorage.setItem(EMAIL_KEY, email);
+      });
+    },
+    signOut: function() {
+      if (!firebaseReady) return Promise.resolve();
+      return firebase.auth().signOut();
+    }
+  };
+})();
+
+// ---------- Storage router: Firestore when signed in, localStorage otherwise ----------
+// Same shape either way (get/set/delete/list all return Promises), so the rest of the
+// app doesn't need to know or care which backend is actually being used.
+(function() {
+  var PREFIX = 'girltime:';
+
+  function localGet(key) {
+    try {
+      var raw = localStorage.getItem(PREFIX + key);
+      if (raw === null) return Promise.reject(new Error('not found'));
+      return Promise.resolve({ key: key, value: raw, shared: false });
+    } catch (e) { return Promise.reject(e); }
+  }
+  function localSet(key, value) {
+    try {
+      localStorage.setItem(PREFIX + key, value);
+      return Promise.resolve({ key: key, value: value, shared: false });
+    } catch (e) { return Promise.reject(e); }
+  }
+  function localDelete(key) {
+    try {
+      localStorage.removeItem(PREFIX + key);
+      return Promise.resolve({ key: key, deleted: true, shared: false });
+    } catch (e) { return Promise.reject(e); }
+  }
+  function localList(prefix) {
+    try {
+      var keys = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k.indexOf(PREFIX) === 0) {
+          var stripped = k.slice(PREFIX.length);
+          if (!prefix || stripped.indexOf(prefix) === 0) keys.push(stripped);
+        }
+      }
+      return Promise.resolve({ keys: keys, prefix: prefix, shared: false });
+    } catch (e) { return Promise.reject(e); }
+  }
+
+  function userDocRef(key) {
+    var user = window.girlTimeAuth.getUser();
+    return firebase.firestore().collection('users').doc(user.uid).collection('kv').doc(key);
+  }
+
+  window.storage = {
+    get: function(key) {
+      var user = window.girlTimeAuth.getUser();
+      if (!user) return localGet(key);
+      return userDocRef(key).get().then(function(doc) {
+        if (!doc.exists) return Promise.reject(new Error('not found'));
+        return { key: key, value: doc.data().value, shared: false };
+      });
+    },
+    set: function(key, value) {
+      var user = window.girlTimeAuth.getUser();
+      if (!user) return localSet(key, value);
+      return userDocRef(key).set({ value: value }).then(function() {
+        return { key: key, value: value, shared: false };
+      });
+    },
+    delete: function(key) {
+      var user = window.girlTimeAuth.getUser();
+      if (!user) return localDelete(key);
+      return userDocRef(key).delete().then(function() {
+        return { key: key, deleted: true, shared: false };
+      });
+    },
+    list: function(prefix) {
+      var user = window.girlTimeAuth.getUser();
+      if (!user) return localList(prefix);
+      return firebase.firestore().collection('users').doc(user.uid).collection('kv').get().then(function(snap) {
+        var keys = [];
+        snap.forEach(function(doc) {
+          if (!prefix || doc.id.indexOf(prefix) === 0) keys.push(doc.id);
+        });
+        return { keys: keys, prefix: prefix, shared: false };
+      });
+    },
+    // One-time copy of whatever's in localStorage up to this signed-in user's Firestore
+    // account, used the first time someone signs in on a device that already has local data.
+    _migrateLocalToCloud: function(keys) {
+      var user = window.girlTimeAuth.getUser();
+      if (!user) return Promise.resolve();
+      return Promise.all(keys.map(function(key) {
+        var raw = localStorage.getItem(PREFIX + key);
+        if (raw === null) return Promise.resolve();
+        return userDocRef(key).set({ value: raw });
+      }));
+    }
+  };
+})();
+
 (function() {
   var state = {
     events: [],       // [{ id, name, time, steps: [{id,label,hours,minutes}] }]
     loaded: false,
-    modal: null,       // 'save' | 'routines' | 'emoji' | 'example' | 'confirm-reset' | 'edit-step'
+    modal: null,       // 'save' | 'routines' | 'emoji' | 'example' | 'confirm-reset' | 'edit-step' | 'account'
     modalEventId: null,
     modalStepId: null,
     routines: [],
     saveNameInput: '',
-    stepMemory: {}     // { normalizedLabel: {hours, minutes} } — remembered durations per step label
+    stepMemory: {},    // { normalizedLabel: {hours, minutes} } — remembered durations per step label
+    user: null,        // signed-in Firebase user, or null if not signed in / syncing disabled
+    emailInput: '',
+    emailLinkSent: false
   };
 
   var STORAGE_KEY_SESSION = 'session';
@@ -1209,6 +1340,7 @@ if (!window.storage) {
     html += '  <div class="tagline">work backward from any event to know exactly when to start</div></div>';
     html += '  <div class="header-links">';
     html += '    <button class="routines-link" data-action="open-example">how it works</button>';
+    html += '    <button class="routines-link" data-action="open-account">' + (state.user ? esc(state.user.email || 'account') : 'sign in to sync') + '</button>';
     html += '  </div>';
     html += '</div>';
 
@@ -1303,6 +1435,8 @@ if (!window.storage) {
       html += renderResetConfirmModal();
     } else if (state.modal === 'edit-step') {
       html += renderEditStepModal();
+    } else if (state.modal === 'account') {
+      html += renderAccountModal();
     }
 
     app.innerHTML = html;
@@ -1371,6 +1505,32 @@ if (!window.storage) {
     html += '<label class="field-label" for="routineName">name it</label>';
     html += '<input type="text" id="routineName" placeholder="e.g. date night, gym morning" value="' + esc(state.saveNameInput) + '">';
     html += '<button class="primary-btn" data-action="confirm-save" data-event="' + evId + '">save routine</button>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderAccountModal() {
+    var html = '<div class="modal-backdrop modal-top" data-action="close-modal">';
+    html += '<div class="modal-sheet">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+
+    if (state.user) {
+      html += '<div class="modal-title">synced</div>';
+      html += '<div class="warning-text">Signed in as ' + esc(state.user.email || '') + '. Your events, routines, and remembered step durations sync to this account.</div>';
+      html += '<button class="primary-btn ghost" data-action="do-sign-out">sign out</button>';
+    } else {
+      html += '<div class="modal-title">sign in to sync</div>';
+      html += '<div class="warning-text">Sign in to keep your events, routines, and remembered durations synced to your account instead of just this one browser.</div>';
+      html += '<button class="primary-btn" data-action="do-sign-in-google">sign in with Google</button>';
+      html += '<div style="text-align:center;font-size:12px;color:var(--ink-faint);margin:14px 0;">or</div>';
+      if (state.emailLinkSent) {
+        html += '<div class="warning-text">Check your email for a sign-in link — opening it on this device will finish signing you in.</div>';
+      } else {
+        html += '<label class="field-label" for="emailInput">email</label>';
+        html += '<input type="text" inputmode="email" autocomplete="email" id="emailInput" placeholder="you@example.com" value="' + esc(state.emailInput) + '">';
+        html += '<button class="primary-btn ghost" data-action="do-send-email-link" style="margin-top:10px;">email me a sign-in link</button>';
+      }
+    }
     html += '</div></div>';
     return html;
   }
@@ -1458,6 +1618,12 @@ if (!window.storage) {
 
     var editLabelEl = document.getElementById('editStepLabel');
     if (editLabelEl) { editLabelEl.focus(); editLabelEl.select(); }
+
+    var emailInputEl = document.getElementById('emailInput');
+    if (emailInputEl) {
+      emailInputEl.addEventListener('input', function(e) { state.emailInput = e.target.value; });
+      emailInputEl.focus();
+    }
   }
 
   function wireStepHint(labelEl, hoursEl, minutesEl, hintEl) {
@@ -1537,6 +1703,35 @@ if (!window.storage) {
       render();
     } else if (action === 'confirm-reset') {
       resetAll();
+    } else if (action === 'open-account') {
+      state.emailLinkSent = false;
+      state.modal = 'account';
+      render();
+    } else if (action === 'do-sign-in-google') {
+      if (!window.girlTimeAuth) { showToast('Sign-in not available'); }
+      else {
+        window.girlTimeAuth.signInWithGoogle().catch(function(err) {
+          console.error('google sign-in failed', err);
+          showToast('Sign-in failed — try again');
+        });
+      }
+    } else if (action === 'do-send-email-link') {
+      var emailVal = (document.getElementById('emailInput') || {}).value || '';
+      if (!emailVal.trim()) { showToast('Type your email first'); }
+      else if (!window.girlTimeAuth) { showToast('Sign-in not available'); }
+      else {
+        window.girlTimeAuth.sendEmailLink(emailVal.trim()).then(function() {
+          state.emailLinkSent = true;
+          render();
+        }).catch(function(err) {
+          console.error('send email link failed', err);
+          showToast('Could not send email — check the address and try again');
+        });
+      }
+    } else if (action === 'do-sign-out') {
+      if (window.girlTimeAuth) window.girlTimeAuth.signOut();
+      state.modal = null;
+      render();
     } else if (action === 'close-modal') {
       if (btn.classList.contains('modal-backdrop') && e.target !== btn) return; // click landed inside the sheet, not on the backdrop itself
       state.modal = null;
@@ -1626,12 +1821,61 @@ if (!window.storage) {
     reorderStep(ds.eventId, ds.stepId, targetIndex);
   }
 
+  var authCallCount = 0;
+  function handleAuthChange(user) {
+    authCallCount++;
+    var wasSignedIn = !!state.user;
+    state.user = user;
+
+    if (authCallCount === 1) {
+      // First report of auth state (may be null momentarily while Firebase resolves
+      // a persisted session) — kick off the normal initial data load either way.
+      loadInitial();
+      return;
+    }
+
+    if (user && !wasSignedIn) {
+      handleSignInSync();
+    } else if (!user && wasSignedIn) {
+      state.modal = null;
+      showToast('Signed out');
+      loadInitial();
+    } else {
+      render();
+    }
+  }
+
+  function handleSignInSync() {
+    showToast('Signing in…');
+    Promise.all(['session', 'routines', 'stepMemory'].map(function(k) {
+      return window.storage.get(k).then(function() { return true; }).catch(function() { return false; });
+    })).then(function(results) {
+      var hasCloudData = results.some(function(r) { return r; });
+      if (!hasCloudData) {
+        return window.storage._migrateLocalToCloud(['session', 'routines', 'stepMemory']);
+      }
+    }).then(function() {
+      state.modal = null;
+      showToast('Signed in — synced');
+      loadInitial();
+    }).catch(function(err) {
+      console.error('sign-in sync failed', err);
+      showToast('Signed in, but sync failed');
+      state.modal = null;
+      render();
+    });
+  }
+
   function init() {
     var app = document.getElementById('app');
     app.addEventListener('click', onClick);
     app.addEventListener('pointerdown', onDragStart);
     render();
-    loadInitial();
+    if (window.girlTimeAuth) {
+      window.girlTimeAuth.onChange(handleAuthChange);
+    } else {
+      loadInitial();
+    }
   }
 
   if (document.readyState === 'loading') {

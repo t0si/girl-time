@@ -12,6 +12,8 @@
      only. Adding an optional duration per event would make that warning smarter.
   5. Buffer time — an optional cushion (either a global setting or added per-step) to pad the
      schedule with a little slack instead of assuming every step runs exactly on time.
+  6. "Ungroup" a chunk — break a routine-group back into plain individual steps in place, for
+     when you want to freely rearrange its pieces alongside the rest of the timeline.
 
   DONE:
   - Drag-to-reorder steps (three-bar handle) replaced the earlier chronological-entry toggle —
@@ -21,6 +23,10 @@
     with a warning if one event's prep would need to start before the previous event's time.
   - Editing an existing step's label/duration in place (tap a step in the timeline).
   - Step duration memory: the app remembers durations per step label and suggests them again.
+  - Mini-routines: a saved routine can be inserted into another event as a collapsible group
+    ("+ add a saved routine" in the add-steps card) — collapsed it shows as one row with a
+    total duration, expanded it shows each nested step with its own real computed time, and
+    editing/deleting/reordering works both for the whole group and for steps inside it.
 -->
 <html lang="en">
 <head>
@@ -376,6 +382,30 @@
   .icon-btn:active { background: var(--pale); color: var(--rose-deep); }
   .icon-btn:disabled { opacity: 0.25; }
   .icon-btn.delete:active { color: #b6425d; }
+
+  /* ---------- Chunk (grouped routine) rows ---------- */
+  .chunk-header {
+    background: var(--pale);
+    border-radius: 12px;
+    margin: 4px 0;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .chunk-header .step-label { color: var(--berry); }
+  .chunk-chevron {
+    display: inline-block;
+    font-size: 11px;
+    color: var(--rose-deep);
+    margin-left: 2px;
+  }
+  .chunk-children {
+    margin-left: 20px;
+    padding-left: 12px;
+    border-left: 2px solid var(--pale);
+    margin-bottom: 4px;
+  }
+  .chunk-child { padding: 9px 0; }
+  .chunk-child::before { content: none; }
 
   /* ---------- Event anchor node ---------- */
   .event-node {
@@ -894,6 +924,7 @@ window.girlTimeAuth = (function() {
     modal: null,       // 'save' | 'routines' | 'emoji' | 'example' | 'confirm-reset' | 'edit-step' | 'account'
     modalEventId: null,
     modalStepId: null,
+    modalChunkId: null,
     routines: [],
     saveNameInput: '',
     stepMemory: {},    // { normalizedLabel: {hours, minutes} } — remembered durations per step label
@@ -1006,6 +1037,15 @@ window.girlTimeAuth = (function() {
     return null;
   }
 
+  function isChunk(step) { return !!(step && step.kind === 'chunk'); }
+
+  function stepDuration(step) {
+    if (isChunk(step)) {
+      return step.children.reduce(function(sum, c) { return sum + (c.hours || 0) * 60 + (c.minutes || 0); }, 0);
+    }
+    return (step.hours || 0) * 60 + (step.minutes || 0);
+  }
+
   function computeSchedule(eventTimeStr, stepsArr) {
     var eventMin = timeStrToMinutes(eventTimeStr);
     if (eventMin === null) return { rows: [], startOverall: null, valid: false };
@@ -1013,10 +1053,24 @@ window.girlTimeAuth = (function() {
     var rows = new Array(stepsArr.length);
     for (var i = stepsArr.length - 1; i >= 0; i--) {
       var s = stepsArr[i];
-      var dur = (s.hours || 0) * 60 + (s.minutes || 0);
+      var dur = stepDuration(s);
       var end = cursor;
       var start = cursor - dur;
-      rows[i] = { id: s.id || ('ex' + i), label: s.label, hours: s.hours, minutes: s.minutes, start: start, end: end, emoji: guessStepEmoji(s.label) };
+      if (isChunk(s)) {
+        var childCursor = end;
+        var childRows = new Array(s.children.length);
+        for (var j = s.children.length - 1; j >= 0; j--) {
+          var c = s.children[j];
+          var cdur = (c.hours || 0) * 60 + (c.minutes || 0);
+          var cEnd = childCursor;
+          var cStart = childCursor - cdur;
+          childRows[j] = { id: c.id, label: c.label, hours: c.hours, minutes: c.minutes, start: cStart, end: cEnd, emoji: guessStepEmoji(c.label) };
+          childCursor = cStart;
+        }
+        rows[i] = { id: s.id, kind: 'chunk', name: s.name, collapsed: !!s.collapsed, start: start, end: end, children: childRows };
+      } else {
+        rows[i] = { id: s.id || ('ex' + i), label: s.label, hours: s.hours, minutes: s.minutes, start: start, end: end, emoji: guessStepEmoji(s.label) };
+      }
       cursor = start;
     }
     return { rows: rows, startOverall: cursor, eventMin: eventMin, valid: true };
@@ -1033,24 +1087,62 @@ window.girlTimeAuth = (function() {
     ]
   };
 
+  function renderStepRow(row, eventId, interactive, chunkId) {
+    var chunkAttr = chunkId ? ' data-chunk="' + chunkId + '"' : '';
+    var labelPrefix = chunkId ? (row.emoji + ' ') : '';
+    var html = '<div class="step-row' + (chunkId ? ' chunk-child' : '') + '"' +
+      (chunkId ? '' : ' data-emoji="' + esc(row.emoji) + '"') +
+      ' data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + '>';
+    html += '  <div class="step-time">' + minutesToClock(row.start) + '</div>';
+    html += '  <div class="step-info"><div class="step-label">' + labelPrefix + esc(row.label) + '</div>';
+    html += '  <div class="step-duration">' + durLabel(row.hours, row.minutes) + ' · until ' + minutesToClock(row.end) + '</div></div>';
+    if (interactive) {
+      html += '  <div class="step-actions">';
+      html += '    <button class="icon-btn" data-action="edit-step" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + ' title="Edit">&#9998;</button>';
+      html += '    <button class="icon-btn delete" data-action="delete-step" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + ' title="Remove">&times;</button>';
+      html += '    <span class="icon-btn drag-handle" title="Drag to reorder">&#9776;</span>';
+      html += '  </div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderChunkRow(row, eventId, interactive) {
+    var totalMin = row.children.reduce(function(sum, c) { return sum + (c.hours || 0) * 60 + (c.minutes || 0); }, 0);
+    var html = '<div class="step-row chunk-header" data-emoji="&#129513;" data-event="' + eventId + '" data-id="' + row.id + '">';
+    html += '  <div class="step-time">' + minutesToClock(row.start) + '</div>';
+    html += '  <div class="step-info"' + (interactive ? ' data-action="toggle-chunk" data-event="' + eventId + '" data-id="' + row.id + '" style="cursor:pointer;"' : '') + '>';
+    html += '    <div class="step-label">' + esc(row.name) + ' <span class="chunk-chevron">' + (row.collapsed ? '&#9656;' : '&#9662;') + '</span></div>';
+    html += '    <div class="step-duration">' + row.children.length + ' step' + (row.children.length === 1 ? '' : 's') + ' · ' + durLabel(Math.floor(totalMin / 60), totalMin % 60) + ' · until ' + minutesToClock(row.end) + '</div>';
+    html += '  </div>';
+    if (interactive) {
+      html += '  <div class="step-actions">';
+      html += '    <button class="icon-btn delete" data-action="delete-step" data-event="' + eventId + '" data-id="' + row.id + '" title="Remove group">&times;</button>';
+      html += '    <span class="icon-btn drag-handle" title="Drag to reorder">&#9776;</span>';
+      html += '  </div>';
+    }
+    html += '</div>';
+    if (!row.collapsed) {
+      html += '<div class="chunk-children">';
+      row.children.forEach(function(child) {
+        html += renderStepRow(child, eventId, interactive, row.id);
+      });
+      html += '</div>';
+    }
+    return html;
+  }
+
   function renderTimelineHTML(sched, eventName, interactive, eventId) {
     var html = '<div class="timeline">';
     if (!sched.rows.length) {
       html += '<div class="empty-note">No steps yet — add your first one below (like "shower" or "drive"). Drag the handle to reorder anytime.</div>';
     } else {
       sched.rows.forEach(function(row) {
-        html += '<div class="step-row" data-emoji="' + esc(row.emoji) + '" data-event="' + eventId + '" data-id="' + row.id + '">';
-        html += '  <div class="step-time">' + minutesToClock(row.start) + '</div>';
-        html += '  <div class="step-info"><div class="step-label">' + esc(row.label) + '</div>';
-        html += '  <div class="step-duration">' + durLabel(row.hours, row.minutes) + ' · until ' + minutesToClock(row.end) + '</div></div>';
-        if (interactive) {
-          html += '  <div class="step-actions">';
-          html += '    <button class="icon-btn" data-action="edit-step" data-event="' + eventId + '" data-id="' + row.id + '" title="Edit">&#9998;</button>';
-          html += '    <button class="icon-btn delete" data-action="delete-step" data-event="' + eventId + '" data-id="' + row.id + '" title="Remove">&times;</button>';
-          html += '    <span class="icon-btn drag-handle" title="Drag to reorder">&#9776;</span>';
-          html += '  </div>';
+        if (row.kind === 'chunk') {
+          html += renderChunkRow(row, eventId, interactive);
+        } else {
+          html += renderStepRow(row, eventId, interactive, null);
         }
-        html += '</div>';
       });
     }
     html += '<div class="event-node">';
@@ -1086,6 +1178,17 @@ window.girlTimeAuth = (function() {
           name: ev.name || '',
           time: ev.time || '',
           steps: (ev.steps || []).map(function(s) {
+            if (s.kind === 'chunk') {
+              return {
+                id: s.id || uid(),
+                kind: 'chunk',
+                name: s.name || '',
+                collapsed: s.collapsed !== false,
+                children: (s.children || []).map(function(c) {
+                  return { id: c.id || uid(), label: c.label, hours: c.hours || 0, minutes: c.minutes || 0 };
+                })
+              };
+            }
             return { id: s.id || uid(), label: s.label, hours: s.hours || 0, minutes: s.minutes || 0 };
           })
         };
@@ -1237,12 +1340,18 @@ window.girlTimeAuth = (function() {
     render();
   }
 
-  function editStep(eventId, stepId, label, hours, minutes) {
+  function editStep(eventId, stepId, label, hours, minutes, chunkId) {
     var ev = findEvent(eventId);
     if (!ev) return;
     if (!label.trim()) return;
     if (!hours && !minutes) return;
-    var step = ev.steps.find(function(s) { return s.id === stepId; });
+    var list = ev.steps;
+    if (chunkId) {
+      var parentChunk = ev.steps.find(function(s) { return s.id === chunkId; });
+      if (!parentChunk) return;
+      list = parentChunk.children;
+    }
+    var step = list.find(function(s) { return s.id === stepId; });
     if (!step) return;
     snapshotState();
     step.label = label.trim();
@@ -1255,11 +1364,20 @@ window.girlTimeAuth = (function() {
     render();
   }
 
-  function deleteStep(eventId, stepId) {
+  function deleteStep(eventId, stepId, chunkId) {
     var ev = findEvent(eventId);
     if (!ev) return;
     snapshotState();
-    ev.steps = ev.steps.filter(function(s) { return s.id !== stepId; });
+    if (chunkId) {
+      var parentChunk = ev.steps.find(function(s) { return s.id === chunkId; });
+      if (!parentChunk) return;
+      parentChunk.children = parentChunk.children.filter(function(c) { return c.id !== stepId; });
+      if (!parentChunk.children.length) {
+        ev.steps = ev.steps.filter(function(s) { return s.id !== chunkId; }); // drop the group once it's empty
+      }
+    } else {
+      ev.steps = ev.steps.filter(function(s) { return s.id !== stepId; });
+    }
     debounceSaveSession();
     render();
   }
@@ -1278,16 +1396,40 @@ window.girlTimeAuth = (function() {
     render();
   }
 
+  function reorderChunkChild(eventId, chunkId, childId, newIndex) {
+    var ev = findEvent(eventId);
+    if (!ev) return;
+    var chunk = ev.steps.find(function(s) { return s.id === chunkId; });
+    if (!chunk) return;
+    var idx = chunk.children.findIndex(function(c) { return c.id === childId; });
+    if (idx === -1) return;
+    newIndex = Math.max(0, Math.min(newIndex, chunk.children.length - 1));
+    if (idx === newIndex) return;
+    snapshotState();
+    var moved = chunk.children.splice(idx, 1)[0];
+    chunk.children.splice(newIndex, 0, moved);
+    debounceSaveSession();
+    render();
+  }
+
   function saveAsRoutine(eventId, name) {
     if (!name.trim()) return;
     var ev = findEvent(eventId);
     if (!ev || !ev.steps.length) { showToast("Add a step first"); return; }
+    var flatSteps = [];
+    ev.steps.forEach(function(s) {
+      if (isChunk(s)) {
+        s.children.forEach(function(c) { flatSteps.push({ label: c.label, hours: c.hours, minutes: c.minutes }); });
+      } else {
+        flatSteps.push({ label: s.label, hours: s.hours, minutes: s.minutes });
+      }
+    });
     var routine = {
       id: uid(),
       name: name.trim(),
       eventName: ev.name || '',
       time: ev.time || '',
-      steps: ev.steps.map(function(s) { return { label: s.label, hours: s.hours, minutes: s.minutes }; })
+      steps: flatSteps
     };
     state.routines.unshift(routine);
     saveRoutines().then(function() {
@@ -1313,6 +1455,25 @@ window.girlTimeAuth = (function() {
       var timeInput = document.getElementById('eventTime-' + ev.id);
       if (timeInput) timeInput.focus();
     }
+  }
+
+  function insertRoutineAsChunk(eventId, routineId) {
+    var ev = findEvent(eventId);
+    var r = state.routines.find(function(x) { return x.id === routineId; });
+    if (!ev || !r || !r.steps.length) return;
+    snapshotState();
+    var chunk = {
+      id: uid(),
+      kind: 'chunk',
+      name: r.name,
+      collapsed: true,
+      children: r.steps.map(function(s) { return { id: uid(), label: s.label, hours: s.hours, minutes: s.minutes }; })
+    };
+    ev.steps.unshift(chunk);
+    state.modal = null;
+    debounceSaveSession();
+    showToast('Added "' + r.name + '" as a group');
+    render();
   }
 
   function deleteRoutine(id) {
@@ -1398,6 +1559,7 @@ window.girlTimeAuth = (function() {
       html += '    <button class="primary-btn" data-action="add-step" data-event="' + ev.id + '"' + (sched.valid ? '' : ' disabled') + '>+ add step</button>';
       html += '    <button class="remember-btn" type="button" data-action="remember-only" data-event="' + ev.id + '" title="Remember this duration without adding a step">&#128190;</button>';
       html += '  </div>';
+      html += '  <button class="primary-btn ghost" data-action="open-insert-chunk" data-event="' + ev.id + '" style="margin-top:8px;">+ add a saved routine</button>';
       html += '</div>';
 
       if (sched.valid) {
@@ -1446,23 +1608,28 @@ window.girlTimeAuth = (function() {
 
   function renderRoutinesModal() {
     var evId = state.modalEventId;
+    var mode = state.routinesModalMode || 'load';
     var ev = findEvent(evId);
     var html = '<div class="modal-backdrop" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
-    html += '<div class="modal-title">my saved routines/events</div>';
+    html += '<div class="modal-title">' + (mode === 'insert' ? 'add a saved routine' : 'my saved routines/events') + '</div>';
     if (!state.routines.length) {
       html += '<div class="empty-msg">No saved routines yet. Build a schedule, then tap "save this routine".</div>';
     } else {
       state.routines.forEach(function(r) {
         var totalMin = r.steps.reduce(function(sum, s) { return sum + (s.hours||0)*60 + (s.minutes||0); }, 0);
         var timeMin = r.time ? timeStrToMinutes(r.time) : null;
-        var timeLabel = timeMin !== null ? ' · ' + minutesToClock(timeMin) : '';
+        var timeLabel = (mode !== 'insert' && timeMin !== null) ? ' · ' + minutesToClock(timeMin) : '';
         html += '<div class="routine-item">';
         html += '  <div><div class="routine-name">' + esc(r.name) + '</div>';
         html += '  <div class="routine-meta">' + r.steps.length + ' step' + (r.steps.length === 1 ? '' : 's') + ' · ' + durLabel(Math.floor(totalMin/60), totalMin%60) + ' total' + timeLabel + '</div></div>';
         html += '  <div class="routine-btns">';
-        html += '    <button class="small-btn load" data-action="load-routine" data-event="' + evId + '" data-id="' + r.id + '">load</button>';
+        if (mode === 'insert') {
+          html += '    <button class="small-btn load" data-action="insert-routine-chunk" data-event="' + evId + '" data-id="' + r.id + '">add</button>';
+        } else {
+          html += '    <button class="small-btn load" data-action="load-routine" data-event="' + evId + '" data-id="' + r.id + '">load</button>';
+        }
         html += '    <button class="small-btn del" data-action="delete-routine" data-id="' + r.id + '">delete</button>';
         html += '  </div>';
         html += '</div>';
@@ -1474,9 +1641,12 @@ window.girlTimeAuth = (function() {
 
   function renderEditStepModal() {
     var evId = state.modalEventId;
+    var chunkId = state.modalChunkId;
     var ev = findEvent(evId);
-    var step = ev ? ev.steps.find(function(s) { return s.id === state.modalStepId; }) : null;
+    var list = ev ? (chunkId ? (ev.steps.find(function(s) { return s.id === chunkId; }) || {}).children : ev.steps) : null;
+    var step = list ? list.find(function(s) { return s.id === state.modalStepId; }) : null;
     if (!step) return '';
+    var chunkAttr = chunkId ? ' data-chunk="' + chunkId + '"' : '';
     var html = '<div class="modal-backdrop" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
@@ -1490,8 +1660,8 @@ window.girlTimeAuth = (function() {
     html += '  <div class="dur-field"><label class="field-label" for="editStepHours">hours</label><input type="number" id="editStepHours" min="0" max="23" value="' + step.hours + '"></div>';
     html += '  <div class="dur-field"><label class="field-label" for="editStepMinutes">minutes</label><input type="number" id="editStepMinutes" min="0" max="59" value="' + step.minutes + '"></div>';
     html += '</div>';
-    html += '<button class="primary-btn" data-action="confirm-edit-step" data-event="' + evId + '" data-id="' + step.id + '">save changes</button>';
-    html += '<button class="primary-btn ghost" data-action="delete-step-from-modal" data-event="' + evId + '" data-id="' + step.id + '" style="margin-top:8px;">remove this step</button>';
+    html += '<button class="primary-btn" data-action="confirm-edit-step" data-event="' + evId + '" data-id="' + step.id + '"' + chunkAttr + '>save changes</button>';
+    html += '<button class="primary-btn ghost" data-action="delete-step-from-modal" data-event="' + evId + '" data-id="' + step.id + '"' + chunkAttr + ' style="margin-top:8px;">remove this step</button>';
     html += '</div></div>';
     return html;
   }
@@ -1650,6 +1820,7 @@ window.girlTimeAuth = (function() {
     var action = btn.getAttribute('data-action');
     var id = btn.getAttribute('data-id');
     var eventId = btn.getAttribute('data-event');
+    var chunkId = btn.getAttribute('data-chunk');
 
     if (action === 'add-step') {
       var label = document.getElementById('stepLabel-' + eventId).value;
@@ -1667,20 +1838,29 @@ window.girlTimeAuth = (function() {
         showToast('Remembered "' + rLabel.trim() + '" → ' + durLabel(rHours, rMinutes));
       }
     } else if (action === 'delete-step') {
-      deleteStep(eventId, id);
+      deleteStep(eventId, id, chunkId);
     } else if (action === 'edit-step') {
       state.modal = 'edit-step';
       state.modalEventId = eventId;
       state.modalStepId = id;
+      state.modalChunkId = chunkId;
       render();
     } else if (action === 'confirm-edit-step') {
       var editLabel = document.getElementById('editStepLabel').value;
       var editHours = parseInt(document.getElementById('editStepHours').value, 10) || 0;
       var editMinutes = parseInt(document.getElementById('editStepMinutes').value, 10) || 0;
-      editStep(eventId, id, editLabel, editHours, editMinutes);
+      editStep(eventId, id, editLabel, editHours, editMinutes, chunkId);
     } else if (action === 'delete-step-from-modal') {
       state.modal = null;
-      deleteStep(eventId, id);
+      deleteStep(eventId, id, chunkId);
+    } else if (action === 'toggle-chunk') {
+      var evForToggle = findEvent(eventId);
+      var chunkToToggle = evForToggle && evForToggle.steps.find(function(s) { return s.id === id; });
+      if (chunkToToggle) {
+        chunkToToggle.collapsed = !chunkToToggle.collapsed;
+        debounceSaveSession();
+        render();
+      }
     } else if (action === 'add-event') {
       addEvent();
     } else if (action === 'remove-event') {
@@ -1688,7 +1868,15 @@ window.girlTimeAuth = (function() {
     } else if (action === 'open-routines') {
       state.modal = 'routines';
       state.modalEventId = eventId;
+      state.routinesModalMode = 'load';
       render();
+    } else if (action === 'open-insert-chunk') {
+      state.modal = 'routines';
+      state.modalEventId = eventId;
+      state.routinesModalMode = 'insert';
+      render();
+    } else if (action === 'insert-routine-chunk') {
+      insertRoutineAsChunk(eventId, id);
     } else if (action === 'open-save') {
       state.modal = 'save';
       state.modalEventId = eventId;
@@ -1757,9 +1945,18 @@ window.girlTimeAuth = (function() {
     if (!rowEl) return;
     var eventId = rowEl.getAttribute('data-event');
     var stepId = rowEl.getAttribute('data-id');
+    var chunkId = rowEl.getAttribute('data-chunk'); // set only on rows nested inside a chunk
     var ev = findEvent(eventId);
     if (!ev) return;
-    var startIndex = ev.steps.findIndex(function(s) { return s.id === stepId; });
+
+    var startIndex;
+    if (chunkId) {
+      var parentChunk = ev.steps.find(function(s) { return s.id === chunkId; });
+      if (!parentChunk) return;
+      startIndex = parentChunk.children.findIndex(function(c) { return c.id === stepId; });
+    } else {
+      startIndex = ev.steps.findIndex(function(s) { return s.id === stepId; });
+    }
     if (startIndex === -1) return;
 
     var container = rowEl.parentElement;
@@ -1771,6 +1968,7 @@ window.girlTimeAuth = (function() {
     dragState = {
       eventId: eventId,
       stepId: stepId,
+      chunkId: chunkId,
       startIndex: startIndex,
       rowEl: rowEl,
       startY: e.clientY,
@@ -1819,7 +2017,11 @@ window.girlTimeAuth = (function() {
       targetIndex = computeDragTargetIndex(ds);
     }
     dragState = null;
-    reorderStep(ds.eventId, ds.stepId, targetIndex);
+    if (ds.chunkId) {
+      reorderChunkChild(ds.eventId, ds.chunkId, ds.stepId, targetIndex);
+    } else {
+      reorderStep(ds.eventId, ds.stepId, targetIndex);
+    }
   }
 
   var authCallCount = 0;

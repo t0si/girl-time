@@ -639,6 +639,32 @@
     cursor: pointer;
   }
 
+  .routines-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    background: var(--bg);
+    padding: 4px;
+    border-radius: 12px;
+  }
+  .routines-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 8px 10px;
+    border-radius: 9px;
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .routines-tab.active {
+    background: var(--surface);
+    color: var(--rose-deep);
+    box-shadow: 0 1px 4px rgba(94,47,73,0.12);
+  }
+
   .routine-item {
     background: var(--surface);
     border-radius: 14px;
@@ -938,6 +964,7 @@ window.girlTimeAuth = (function() {
     modalEventId: null,
     modalStepId: null,
     modalChunkId: null,
+    routinesTab: 'routines',
     routines: [],
     saveNameInput: '',
     stepMemory: {},    // { normalizedLabel: {hours, minutes} } — remembered durations per step label
@@ -1425,7 +1452,7 @@ window.girlTimeAuth = (function() {
     render();
   }
 
-  function saveAsRoutine(eventId, name) {
+  function saveAsRoutine(eventId, name, isMini) {
     if (!name.trim()) return;
     var ev = findEvent(eventId);
     if (!ev || !ev.steps.length) { showToast("Add a step first"); return; }
@@ -1442,11 +1469,12 @@ window.girlTimeAuth = (function() {
       name: name.trim(),
       eventName: ev.name || '',
       time: ev.time || '',
+      isMini: !!isMini,
       steps: flatSteps
     };
     state.routines.unshift(routine);
     saveRoutines().then(function() {
-      showToast('Saved "' + routine.name + '"');
+      showToast('Saved "' + routine.name + '"' + (isMini ? ' as a mini routine' : ''));
     }).catch(function() { showToast('Could not save'); });
     state.modal = null;
     render();
@@ -1539,7 +1567,7 @@ window.girlTimeAuth = (function() {
       }
 
       html += '<div class="event-card-header">';
-      html += '  <button class="routines-link" data-action="open-routines" data-event="' + ev.id + '" style="padding-left:0;white-space:normal;">my saved routines/events</button>';
+      html += '  <button class="routines-link" data-action="open-routines" data-event="' + ev.id + '" style="padding-left:0;white-space:normal;">my saved routines</button>';
       html += '  <div class="utility-row">';
       html += '    <button class="utility-btn undo" data-action="undo"' + (undoStack.length ? '' : ' disabled') + '>&#8634; undo</button>';
       html += '    <button class="utility-btn reset" data-action="open-reset-confirm">start over</button>';
@@ -1588,7 +1616,7 @@ window.girlTimeAuth = (function() {
         html += '<div class="empty-msg">Set an event time above to start building this schedule.</div>';
       }
 
-      html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '" style="margin-top:6px;">save this routine</button>';
+      html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '" style="margin-top:6px;">save this schedule</button>';
 
       html += '</div>'; // .event-section
     });
@@ -1626,14 +1654,32 @@ window.girlTimeAuth = (function() {
     var html = '<div class="modal-backdrop" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
-    html += '<div class="modal-title">' + (mode === 'insert' ? 'add a saved routine' : 'my saved routines/events') + '</div>';
-    if (!state.routines.length) {
-      html += '<div class="empty-msg">No saved routines yet. Build a schedule, then tap "save this routine".</div>';
+
+    var list, emptyMsg;
+    if (mode === 'insert') {
+      html += '<div class="modal-title">add a saved routine</div>';
+      list = state.routines.filter(function(r) { return r.isMini; });
+      emptyMsg = 'No mini routines saved yet. Save one with "save as mini routine" to reuse it as a group here.';
     } else {
-      state.routines.forEach(function(r) {
+      html += '<div class="modal-title">my saved routines</div>';
+      var tab = state.routinesTab || 'routines';
+      html += '<div class="routines-tabs">';
+      html += '  <button class="routines-tab' + (tab === 'routines' ? ' active' : '') + '" data-action="switch-routines-tab" data-id="routines">routines</button>';
+      html += '  <button class="routines-tab' + (tab === 'mini' ? ' active' : '') + '" data-action="switch-routines-tab" data-id="mini">mini routines</button>';
+      html += '</div>';
+      list = state.routines.filter(function(r) { return tab === 'mini' ? r.isMini : !r.isMini; });
+      emptyMsg = tab === 'mini'
+        ? 'No mini routines saved yet. Save one with "save as mini routine" to reuse it as a group in other events.'
+        : 'No saved routines yet. Build a schedule, then tap "save as routine".';
+    }
+
+    if (!list.length) {
+      html += '<div class="empty-msg">' + emptyMsg + '</div>';
+    } else {
+      list.forEach(function(r) {
         var totalMin = r.steps.reduce(function(sum, s) { return sum + (s.hours||0)*60 + (s.minutes||0); }, 0);
         var timeMin = r.time ? timeStrToMinutes(r.time) : null;
-        var timeLabel = (mode !== 'insert' && timeMin !== null) ? ' · ' + minutesToClock(timeMin) : '';
+        var timeLabel = (mode !== 'insert' && !r.isMini && timeMin !== null) ? ' · ' + minutesToClock(timeMin) : '';
         html += '<div class="routine-item">';
         html += '  <div><div class="routine-name">' + esc(r.name) + '</div>';
         html += '  <div class="routine-meta">' + r.steps.length + ' step' + (r.steps.length === 1 ? '' : 's') + ' · ' + durLabel(Math.floor(totalMin/60), totalMin%60) + ' total' + timeLabel + '</div></div>';
@@ -1685,10 +1731,12 @@ window.girlTimeAuth = (function() {
     var html = '<div class="modal-backdrop" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
-    html += '<div class="modal-title">save as a routine</div>';
+    html += '<div class="modal-title">save this schedule</div>';
     html += '<label class="field-label" for="routineName">name it</label>';
     html += '<input type="text" id="routineName" placeholder="e.g. date night, gym morning" value="' + esc(state.saveNameInput) + '">';
-    html += '<button class="primary-btn" data-action="confirm-save" data-event="' + evId + '">save routine</button>';
+    html += '<div class="warning-text" style="margin-top:12px;">Save as a <strong>routine</strong> to reload the whole event (name, time, and steps) later — or as a <strong>mini routine</strong> to reuse just the steps as a group inside other events.</div>';
+    html += '<button class="primary-btn" data-action="confirm-save" data-event="' + evId + '">save as routine</button>';
+    html += '<button class="primary-btn ghost" data-action="confirm-save-mini" data-event="' + evId + '" style="margin-top:8px;">save as mini routine</button>';
     html += '</div></div>';
     return html;
   }
@@ -1890,6 +1938,9 @@ window.girlTimeAuth = (function() {
       render();
     } else if (action === 'insert-routine-chunk') {
       insertRoutineAsChunk(eventId, id);
+    } else if (action === 'switch-routines-tab') {
+      state.routinesTab = id;
+      render();
     } else if (action === 'open-save') {
       state.modal = 'save';
       state.modalEventId = eventId;
@@ -1940,7 +1991,10 @@ window.girlTimeAuth = (function() {
       render();
     } else if (action === 'confirm-save') {
       var nm = document.getElementById('routineName').value;
-      saveAsRoutine(eventId, nm);
+      saveAsRoutine(eventId, nm, false);
+    } else if (action === 'confirm-save-mini') {
+      var nmMini = document.getElementById('routineName').value;
+      saveAsRoutine(eventId, nmMini, true);
     } else if (action === 'load-routine') {
       loadRoutine(eventId, id);
     } else if (action === 'delete-routine') {

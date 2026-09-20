@@ -253,6 +253,30 @@
     gap: 8px;
   }
 
+  .mini-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    cursor: pointer;
+  }
+  .mini-toggle-row input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--rose);
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .mini-toggle-row span {
+    font-size: 13px;
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+  .mini-toggle-hint {
+    font-weight: 400;
+    color: var(--ink-faint);
+  }
+
   input[type="text"], input[type="time"], input[type="number"] {
     font-family: 'Manrope', sans-serif;
     border: 1.5px solid var(--line);
@@ -984,7 +1008,7 @@ window.girlTimeAuth = (function() {
   function uid() { return 's' + (idCounter++) + '_' + Math.random().toString(36).slice(2, 7); }
 
   function makeBlankEvent() {
-    return { id: uid(), name: '', time: '', steps: [] };
+    return { id: uid(), name: '', time: '', steps: [], isMiniMode: false };
   }
 
   // ---------- time helpers ----------
@@ -1116,6 +1140,36 @@ window.girlTimeAuth = (function() {
     return { rows: rows, startOverall: cursor, eventMin: eventMin, valid: true };
   }
 
+  // For mini routines: no event time to anchor to, so steps run forward from 0
+  // and every "time" shown is really an elapsed duration, not a clock time.
+  function computeRelativeSchedule(stepsArr) {
+    var cursor = 0;
+    var rows = stepsArr.map(function(s) {
+      if (isChunk(s)) {
+        var childCursor = cursor;
+        var children = s.children.map(function(c) {
+          var dur = (c.hours || 0) * 60 + (c.minutes || 0);
+          var row = { id: c.id, label: c.label, hours: c.hours, minutes: c.minutes, start: childCursor, end: childCursor + dur, emoji: guessStepEmoji(c.label) };
+          childCursor += dur;
+          return row;
+        });
+        var totalDur = stepDuration(s);
+        var row = { id: s.id, kind: 'chunk', name: s.name, collapsed: !!s.collapsed, start: cursor, end: cursor + totalDur, children: children };
+        cursor += totalDur;
+        return row;
+      }
+      var dur = (s.hours || 0) * 60 + (s.minutes || 0);
+      var row = { id: s.id, label: s.label, hours: s.hours, minutes: s.minutes, start: cursor, end: cursor + dur, emoji: guessStepEmoji(s.label) };
+      cursor += dur;
+      return row;
+    });
+    return { rows: rows, totalMinutes: cursor };
+  }
+
+  function elapsedLabel(totalMins) {
+    return durLabel(Math.floor(totalMins / 60), totalMins % 60);
+  }
+
   var EXAMPLE_EVENT = {
     name: 'dinner with grace',
     time: '19:00',
@@ -1127,15 +1181,17 @@ window.girlTimeAuth = (function() {
     ]
   };
 
-  function renderStepRow(row, eventId, interactive, chunkId) {
+  function renderStepRow(row, eventId, interactive, chunkId, relative) {
     var chunkAttr = chunkId ? ' data-chunk="' + chunkId + '"' : '';
     var labelPrefix = chunkId ? (row.emoji + ' ') : '';
+    var startLabel = relative ? elapsedLabel(row.start) : minutesToClock(row.start);
+    var endLabel = relative ? elapsedLabel(row.end) : minutesToClock(row.end);
     var html = '<div class="step-row' + (chunkId ? ' chunk-child' : '') + '"' +
       (chunkId ? '' : ' data-emoji="' + esc(row.emoji) + '"') +
       ' data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + '>';
-    html += '  <div class="step-time">' + minutesToClock(row.start) + '</div>';
+    html += '  <div class="step-time">' + startLabel + '</div>';
     html += '  <div class="step-info"><div class="step-label">' + labelPrefix + esc(row.label) + '</div>';
-    html += '  <div class="step-duration">' + durLabel(row.hours, row.minutes) + ' · until ' + minutesToClock(row.end) + '</div></div>';
+    html += '  <div class="step-duration">' + durLabel(row.hours, row.minutes) + ' · until ' + endLabel + '</div></div>';
     if (interactive) {
       html += '  <div class="step-actions">';
       html += '    <button class="icon-btn" data-action="edit-step" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + ' title="Edit">&#9998;</button>';
@@ -1147,13 +1203,15 @@ window.girlTimeAuth = (function() {
     return html;
   }
 
-  function renderChunkRow(row, eventId, interactive) {
+  function renderChunkRow(row, eventId, interactive, relative) {
     var totalMin = row.children.reduce(function(sum, c) { return sum + (c.hours || 0) * 60 + (c.minutes || 0); }, 0);
+    var startLabel = relative ? elapsedLabel(row.start) : minutesToClock(row.start);
+    var endLabel = relative ? elapsedLabel(row.end) : minutesToClock(row.end);
     var html = '<div class="step-row chunk-header" data-emoji="&#129513;" data-event="' + eventId + '" data-id="' + row.id + '">';
-    html += '  <div class="step-time">' + minutesToClock(row.start) + '</div>';
+    html += '  <div class="step-time">' + startLabel + '</div>';
     html += '  <div class="step-info"' + (interactive ? ' data-action="toggle-chunk" data-event="' + eventId + '" data-id="' + row.id + '" style="cursor:pointer;"' : '') + '>';
     html += '    <div class="step-label">' + esc(row.name) + ' <span class="chunk-badge">group</span> <span class="chunk-chevron">' + (row.collapsed ? '&#9656;' : '&#9662;') + '</span></div>';
-    html += '    <div class="step-duration">' + row.children.length + ' step' + (row.children.length === 1 ? '' : 's') + ' · ' + durLabel(Math.floor(totalMin / 60), totalMin % 60) + ' · until ' + minutesToClock(row.end) + '</div>';
+    html += '    <div class="step-duration">' + row.children.length + ' step' + (row.children.length === 1 ? '' : 's') + ' · ' + durLabel(Math.floor(totalMin / 60), totalMin % 60) + ' · until ' + endLabel + '</div>';
     html += '  </div>';
     if (interactive) {
       html += '  <div class="step-actions">';
@@ -1165,7 +1223,7 @@ window.girlTimeAuth = (function() {
     if (!row.collapsed) {
       html += '<div class="chunk-children">';
       row.children.forEach(function(child) {
-        html += renderStepRow(child, eventId, interactive, row.id);
+        html += renderStepRow(child, eventId, interactive, row.id, relative);
       });
       html += '</div>';
     }
@@ -1194,6 +1252,23 @@ window.girlTimeAuth = (function() {
     return html;
   }
 
+  function renderRelativeTimelineHTML(relSched, interactive, eventId) {
+    var html = '<div class="timeline relative-timeline">';
+    if (!relSched.rows.length) {
+      html += '<div class="empty-note">No steps yet — add your first one below. Drag the handle to reorder anytime.</div>';
+    } else {
+      relSched.rows.forEach(function(row) {
+        if (row.kind === 'chunk') {
+          html += renderChunkRow(row, eventId, interactive, true);
+        } else {
+          html += renderStepRow(row, eventId, interactive, null, true);
+        }
+      });
+    }
+    html += '</div>'; // .timeline
+    return html;
+  }
+
   // ---------- storage ----------
   function debounceSaveSession() {
     clearTimeout(saveTimer);
@@ -1217,6 +1292,7 @@ window.girlTimeAuth = (function() {
           id: ev.id || uid(),
           name: ev.name || '',
           time: ev.time || '',
+          isMiniMode: !!ev.isMiniMode,
           steps: (ev.steps || []).map(function(s) {
             if (s.kind === 'chunk') {
               return {
@@ -1551,11 +1627,11 @@ window.girlTimeAuth = (function() {
     }
 
     state.events.forEach(function(ev, idx) {
-      var sched = computeSchedule(ev.time, ev.steps);
+      var sched = ev.isMiniMode ? null : computeSchedule(ev.time, ev.steps);
       html += '<div class="event-section">';
 
-      // overlap warning: compare against the previous event in the list
-      if (idx > 0 && sched.valid) {
+      // overlap warning: compare against the previous event in the list (not applicable to mini routines, which have no fixed time)
+      if (!ev.isMiniMode && idx > 0 && sched.valid) {
         var prev = state.events[idx - 1];
         var prevMin = timeStrToMinutes(prev.time);
         if (prevMin !== null && prevMin <= sched.eventMin && sched.startOverall < prevMin) {
@@ -1580,9 +1656,15 @@ window.girlTimeAuth = (function() {
       }
       html += '  <label class="field-label" for="eventName-' + ev.id + '" style="color:var(--berry);">new event/routine' + (state.events.length > 1 ? ' ' + (idx + 1) : '') + '</label>';
       html += '  <div class="event-inputs">';
-      html += '    <div class="event-name-field"><input type="text" id="eventName-' + ev.id + '" data-event="' + ev.id + '" placeholder="e.g. dinner with Grace" value="' + esc(ev.name) + '"></div>';
-      html += '    <div class="event-time-field"><input type="text" inputmode="text" autocomplete="off" placeholder="e.g. 7:00 PM" id="eventTime-' + ev.id + '" data-event="' + ev.id + '" value="' + esc(ev.time) + '"></div>';
+      html += '    <div class="event-name-field" style="flex:' + (ev.isMiniMode ? '1' : '1.3') + ';"><input type="text" id="eventName-' + ev.id + '" data-event="' + ev.id + '" placeholder="e.g. dinner with Grace" value="' + esc(ev.name) + '"></div>';
+      if (!ev.isMiniMode) {
+        html += '    <div class="event-time-field"><input type="text" inputmode="text" autocomplete="off" placeholder="e.g. 7:00 PM" id="eventTime-' + ev.id + '" data-event="' + ev.id + '" value="' + esc(ev.time) + '"></div>';
+      }
       html += '  </div>';
+      html += '  <label class="mini-toggle-row" for="isMini-' + ev.id + '">';
+      html += '    <input type="checkbox" id="isMini-' + ev.id + '" data-event="' + ev.id + '"' + (ev.isMiniMode ? ' checked' : '') + '>';
+      html += '    <span>this is a mini routine <span class="mini-toggle-hint">(no time needed)</span></span>';
+      html += '  </label>';
       html += '</div>';
 
       html += '<div class="add-step-card">';
@@ -1597,13 +1679,20 @@ window.girlTimeAuth = (function() {
       html += '    <div class="dur-field"><label class="field-label" for="stepMinutes-' + ev.id + '">minutes</label><input type="number" id="stepMinutes-' + ev.id + '" min="0" max="59" placeholder="0"></div>';
       html += '  </div>';
       html += '  <div class="add-step-btn-row">';
-      html += '    <button class="primary-btn" data-action="add-step" data-event="' + ev.id + '"' + (sched.valid ? '' : ' disabled') + '>+ add step</button>';
+      html += '    <button class="primary-btn" data-action="add-step" data-event="' + ev.id + '"' + ((ev.isMiniMode || sched.valid) ? '' : ' disabled') + '>+ add step</button>';
       html += '    <button class="remember-btn" type="button" data-action="remember-only" data-event="' + ev.id + '" title="Remember this duration without adding a step">&#128190;</button>';
       html += '  </div>';
       html += '  <button class="primary-btn ghost" data-action="open-insert-chunk" data-event="' + ev.id + '" style="margin-top:8px;">+ add a saved routine</button>';
       html += '</div>';
 
-      if (sched.valid) {
+      if (ev.isMiniMode) {
+        var relSched = computeRelativeSchedule(ev.steps);
+        html += '<div class="startby">';
+        html += '  <div class="eyebrow">total time</div>';
+        html += '  <div class="time">' + elapsedLabel(relSched.totalMinutes) + '</div>';
+        html += '</div>';
+        html += renderRelativeTimelineHTML(relSched, true, ev.id);
+      } else if (sched.valid) {
         html += '<div class="startby">';
         html += '  <div class="eyebrow">start by</div>';
         html += '  <div class="time">' + minutesToClock(sched.startOverall) + '</div>';
@@ -1824,6 +1913,13 @@ window.girlTimeAuth = (function() {
           again.focus();
           try { again.setSelectionRange(cursorPos, cursorPos); } catch (err) {}
         }
+      });
+
+      var miniEl = document.getElementById('isMini-' + ev.id);
+      if (miniEl) miniEl.addEventListener('change', function(e) {
+        ev.isMiniMode = e.target.checked;
+        debounceSaveSession();
+        render();
       });
 
       wireStepHint(

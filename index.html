@@ -263,7 +263,7 @@
   .mini-toggle-row input[type="checkbox"] {
     width: 17px;
     height: 17px;
-    accent-color: var(--rose);
+    accent-color: #E9AFC7;
     flex-shrink: 0;
     cursor: pointer;
   }
@@ -1682,7 +1682,7 @@ window.girlTimeAuth = (function() {
       html += '    <button class="primary-btn" data-action="add-step" data-event="' + ev.id + '"' + ((ev.isMiniMode || sched.valid) ? '' : ' disabled') + '>+ add step</button>';
       html += '    <button class="remember-btn" type="button" data-action="remember-only" data-event="' + ev.id + '" title="Remember this duration without adding a step">&#128190;</button>';
       html += '  </div>';
-      html += '  <button class="primary-btn ghost" data-action="open-insert-chunk" data-event="' + ev.id + '" style="margin-top:8px;">+ add a saved routine</button>';
+      html += '  <button class="primary-btn ghost" data-action="open-insert-chunk" data-event="' + ev.id + '" style="margin-top:8px;">+ add a saved ' + (ev.isMiniMode ? 'routine' : 'mini routine') + '</button>';
       html += '</div>';
 
       if (ev.isMiniMode) {
@@ -1705,7 +1705,7 @@ window.girlTimeAuth = (function() {
         html += '<div class="empty-msg">Set an event time above to start building this schedule.</div>';
       }
 
-      html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '" style="margin-top:6px;">save this schedule</button>';
+      html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '" style="margin-top:6px;">save this ' + (ev.isMiniMode ? 'mini routine' : 'routine') + '</button>';
 
       html += '</div>'; // .event-section
     });
@@ -1746,7 +1746,7 @@ window.girlTimeAuth = (function() {
 
     var list, emptyMsg;
     if (mode === 'insert') {
-      html += '<div class="modal-title">add a saved routine</div>';
+      html += '<div class="modal-title">add a saved ' + (ev && ev.isMiniMode ? 'routine' : 'mini routine') + '</div>';
       list = state.routines.filter(function(r) { return r.isMini; });
       emptyMsg = 'No mini routines saved yet. Save one with "save as mini routine" to reuse it as a group here.';
     } else {
@@ -1878,6 +1878,7 @@ window.girlTimeAuth = (function() {
     html += '  <li>Set an event name and time</li>';
     html += '  <li>Add the steps you need before it — start with whatever comes right before the event, then work backward (you can always drag to reorder)</li>';
     html += '  <li>See your full schedule and know exactly when to start</li>';
+    html += '  <li>Got a set of steps you reuse a lot, like your shower + hair routine? Check "this is a mini routine" when saving it (no time needed) — then drop it into any other event as one reusable group</li>';
     html += '</ol>';
     html += '<div class="example-preview">';
     html += '  <div class="startby"><div class="eyebrow">start by</div><div class="time">' + minutesToClock(exSched.startOverall) + '</div></div>';

@@ -885,6 +885,20 @@ window.girlTimeAuth = (function() {
     isReady: function() { return firebaseReady; },
     signInWithGoogle: function() {
       if (!firebaseReady) return Promise.reject(new Error('Firebase not available'));
+      var isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+      // Inside the native iOS app, Firebase's web popup flow is refused by Google
+      // (auth/operation-not-supported-in-this-environment) — use the native plugin instead,
+      // then hand its credential to the web SDK so our existing onAuthStateChanged listener
+      // (and the rest of the app, which only knows about the web SDK) still works unchanged.
+      if (isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication) {
+        return window.Capacitor.Plugins.FirebaseAuthentication.signInWithGoogle().then(function(result) {
+          var idToken = result && result.credential && result.credential.idToken;
+          var accessToken = result && result.credential && result.credential.accessToken;
+          if (!idToken) return Promise.reject(new Error('No credential returned from native Google sign-in'));
+          var credential = firebase.auth.GoogleAuthProvider.credential(idToken, accessToken);
+          return firebase.auth().signInWithCredential(credential);
+        });
+      }
       return firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
     },
     sendEmailLink: function(email) {
@@ -899,7 +913,11 @@ window.girlTimeAuth = (function() {
     },
     signOut: function() {
       if (!firebaseReady) return Promise.resolve();
-      return firebase.auth().signOut();
+      var isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+      var nativeSignOut = (isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication)
+        ? window.Capacitor.Plugins.FirebaseAuthentication.signOut().catch(function() {})
+        : Promise.resolve();
+      return nativeSignOut.then(function() { return firebase.auth().signOut(); });
     }
   };
 })();
@@ -1859,13 +1877,19 @@ window.girlTimeAuth = (function() {
       html += '<div class="modal-title">sign in to sync</div>';
       html += '<div class="warning-text">Sign in to keep your events, routines, and remembered durations synced to your account instead of just this one browser.</div>';
       html += '<button class="primary-btn" data-action="do-sign-in-google">sign in with Google</button>';
-      html += '<div style="text-align:center;font-size:12px;color:var(--ink-faint);margin:14px 0;">or</div>';
-      if (state.emailLinkSent) {
-        html += '<div class="warning-text">Check your email for a sign-in link — opening it on this device will finish signing you in.</div>';
-      } else {
-        html += '<label class="field-label" for="emailInput">email</label>';
-        html += '<input type="text" inputmode="email" autocomplete="email" id="emailInput" placeholder="you@example.com" value="' + esc(state.emailInput) + '">';
-        html += '<button class="primary-btn ghost" data-action="do-send-email-link" style="margin-top:10px;">email me a sign-in link</button>';
+      // Email-link sign-in depends on a real http/https address and on the link routing back into
+      // this exact app when tapped from Mail — neither holds up inside the native app, so it's
+      // web-only for now; Google sign-in (via the native plugin) is what the app uses instead.
+      var isNativeApp = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+      if (!isNativeApp) {
+        html += '<div style="text-align:center;font-size:12px;color:var(--ink-faint);margin:14px 0;">or</div>';
+        if (state.emailLinkSent) {
+          html += '<div class="warning-text">Check your email for a sign-in link — opening it on this device will finish signing you in.</div>';
+        } else {
+          html += '<label class="field-label" for="emailInput">email</label>';
+          html += '<input type="text" inputmode="email" autocomplete="email" id="emailInput" placeholder="you@example.com" value="' + esc(state.emailInput) + '">';
+          html += '<button class="primary-btn ghost" data-action="do-send-email-link" style="margin-top:10px;">email me a sign-in link</button>';
+        }
       }
     }
     html += '</div></div>';

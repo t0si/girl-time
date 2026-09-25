@@ -1,22 +1,22 @@
 <!DOCTYPE html>
 <!--
   FUTURE FEATURES / ROADMAP (not yet built):
-  1. Export to Google Calendar — as an optional setting/toggle, push each step (and/or the
+  1. Export to Google Calendar - as an optional setting/toggle, push each step (and/or the
      event itself) as calendar entries.
-  2. Share / collaborate on a routine — beyond a one-way export, let a friend view or co-edit
+  2. Share / collaborate on a routine - beyond a one-way export, let a friend view or co-edit
      a saved routine (e.g. via a shareable link), once there's a backend to support it.
-  3. Push notifications — alert at the "start by" time, and optionally at each step's start time,
+  3. Push notifications - alert at the "start by" time, and optionally at each step's start time,
      so the person doesn't have to keep the app open and watch the clock.
-  4. Optional event END time / duration — right now each event is just a single point in time,
+  4. Optional event END time / duration - right now each event is just a single point in time,
      so the "not enough time between events" warning compares against the next event's START time
      only. Adding an optional duration per event would make that warning smarter.
-  5. Buffer time — an optional cushion (either a global setting or added per-step) to pad the
+  5. Buffer time - an optional cushion (either a global setting or added per-step) to pad the
      schedule with a little slack instead of assuming every step runs exactly on time.
-  6. "Ungroup" a chunk — break a routine-group back into plain individual steps in place, for
+  6. "Ungroup" a chunk - break a routine-group back into plain individual steps in place, for
      when you want to freely rearrange its pieces alongside the rest of the timeline.
 
   DONE:
-  - Drag-to-reorder steps (three-bar handle) replaced the earlier chronological-entry toggle —
+  - Drag-to-reorder steps (three-bar handle) replaced the earlier chronological-entry toggle -
     steps always add to the bottom of the list now, and you drag to fix the order, so the math
     still counts backward from the event regardless of typing order.
   - Multiple events in one day, each with its own steps + start-by time, stacked in order,
@@ -24,16 +24,16 @@
   - Editing an existing step's label/duration in place (tap a step in the timeline).
   - Step duration memory: the app remembers durations per step label and suggests them again.
   - Mini-routines: a saved routine can be inserted into another event as a collapsible group
-    ("+ add a saved routine" in the add-steps card) — collapsed it shows as one row with a
+    ("+ add a saved routine" in the add-steps card) - collapsed it shows as one row with a
     total duration, expanded it shows each nested step with its own real computed time, and
     editing/deleting/reordering works both for the whole group and for steps inside it.
 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>girl time</title>
-<meta name="description" content="girl time helps you work backward from any event to know exactly when to start getting ready. Add your event, list the steps you need beforehand (like showering or driving), and girl time tells you the exact time to begin — no more running late.">
+<meta name="description" content="girl time helps you work backward from any event to know exactly when to start getting ready. Add your event, list the steps you need beforehand (like showering or driving), and girl time tells you the exact time to begin - no more running late.">
 <link rel="manifest" href="manifest.json?v=2">
 <meta name="theme-color" content="#D97D9E">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=2">
@@ -72,7 +72,7 @@
     padding: 0;
     background: var(--bg);
     color: var(--ink);
-    font-family: 'Manrope', sans-serif;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
     -webkit-font-smoothing: antialiased;
     min-height: 100%;
   }
@@ -87,7 +87,7 @@
   #app {
     max-width: 460px;
     margin: 0 auto;
-    padding: 28px 20px 60px;
+    padding: calc(28px + env(safe-area-inset-top, 0px)) 20px calc(60px + env(safe-area-inset-bottom, 0px));
     min-height: 100vh;
   }
 
@@ -109,7 +109,7 @@
     gap: 8px;
   }
   .planner-label {
-    font-family: 'Manrope', sans-serif;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.03em;
@@ -136,7 +136,7 @@
   .routines-link {
     background: none;
     border: none;
-    font-family: 'Manrope', sans-serif;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
     font-size: 13px;
     font-weight: 600;
     color: var(--rose-deep);
@@ -156,7 +156,7 @@
     flex-shrink: 0;
   }
   .utility-btn {
-    font-family: 'Manrope', sans-serif;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
@@ -180,6 +180,8 @@
   }
   .primary-btn.danger { background: #b6425d; }
   .primary-btn.danger:active { background: #93334a; }
+  .primary-btn.ghost.danger-text { color: #b6425d; border-color: #f0d3d9; }
+  .primary-btn.ghost.danger-text:active { background: #fdf1f2; }
 
   /* ---------- Event sections ---------- */
   .event-section {
@@ -206,6 +208,13 @@
     margin-bottom: 12px;
   }
   .warning-banner .glyph { flex-shrink: 0; font-size: 14px; }
+  /* Real color emoji render unreliably when a custom web font (Manrope/Fraunces) is
+     first in the fallback chain, in some native WebView contexts - so anywhere an
+     actual emoji shows, skip the custom fonts entirely and go straight to the
+     platform's own emoji font. */
+  .emoji, .step-row::before {
+    font-family: -apple-system, BlinkMacSystemFont, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif !important;
+  }
 
   .event-card-header {
     display: flex;
@@ -279,7 +288,7 @@
   }
 
   input[type="text"], input[type="time"], input[type="number"] {
-    font-family: 'Manrope', sans-serif;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
     border: 1.5px solid var(--line);
     border-radius: 11px;
     padding: 10px 12px;
@@ -550,7 +559,7 @@
     border: none;
     border-radius: 11px;
     padding: 11px 16px;
-    font-family: 'Manrope', sans-serif;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
     font-weight: 700;
     font-size: 14.5px;
     cursor: pointer;
@@ -678,7 +687,7 @@
     border: none;
     padding: 8px 10px;
     border-radius: 9px;
-    font-family: 'Manrope', sans-serif;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
     font-size: 13px;
     font-weight: 700;
     color: var(--ink-soft);
@@ -710,7 +719,7 @@
     font-size: 12.5px;
     font-weight: 700;
     cursor: pointer;
-    font-family: 'Manrope', sans-serif;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
   }
   .small-btn.load { background: var(--pale); color: var(--rose-deep); }
   .small-btn.load:active { background: var(--rose); color: #fff; }
@@ -806,6 +815,15 @@
     .modal-sheet { animation: none; }
     .toast { transition: none; }
   }
+body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:linear-gradient(to right,#F9EDED,#F9EFEE 50%,#FAF3F1);z-index:9999;pointer-events:none;}
+.chunk-badge.chunk-pill{display:flex;width:fit-content;align-items:center;gap:5px;background:transparent;color:#B65D80;border:none;border-radius:0;padding:0;font-size:0.9em;line-height:1.3;font-weight:500;text-transform:none;letter-spacing:normal;vertical-align:middle;cursor:pointer;text-decoration:underline;text-decoration-color:#DA7C9E;text-decoration-thickness:1.5px;text-underline-offset:3px;margin:2px 0 6px 0}
+.chunk-pill .chunk-chevron{display:inline-flex;margin:0;padding:0;font-size:0;color:inherit;transition:transform .2s}
+.chunk-pill .chunk-chevron.open{transform:rotate(90deg)}
+.chunk-pill .chunk-chevron svg{display:block;width:9px;height:9px;position:relative;top:1px}
+.routines-list{height:292px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.routines-tab .tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;margin-left:6px;border-radius:999px;background:#EADDDF;color:#8C7580;font-size:12px;line-height:1;vertical-align:middle}
+.routines-tab.active .tab-count{background:#F9E4EA;color:#B65D80}
+.no-anim,.no-anim *{animation:none !important;transition:none !important}
 </style>
 </head>
 <body>
@@ -814,7 +832,7 @@
     <h1 style="font-family:Georgia,serif;color:#5E2F49;margin:0 0 8px;">girl time</h1>
     <p style="font-family:sans-serif;color:#35242F;line-height:1.6;">
       girl time helps you work backward from any event to know exactly when to start getting ready.
-      Add your event, list the steps you need beforehand — like showering, getting dressed, or driving —
+      Add your event, list the steps you need beforehand - like showering, getting dressed, or driving -
       and girl time works out the exact time you need to begin, so you're never running late again.
       Sign in to sync your events and routines across your devices.
     </p>
@@ -842,7 +860,7 @@ try {
   firebase.initializeApp(firebaseConfig);
   firebaseReady = true;
 } catch (e) {
-  console.error('Firebase init failed — falling back to local-only storage', e);
+  console.error('Firebase init failed - falling back to local-only storage', e);
 }
 
 // ---------- Auth helpers, exposed globally for the main app script ----------
@@ -885,6 +903,20 @@ window.girlTimeAuth = (function() {
     isReady: function() { return firebaseReady; },
     signInWithGoogle: function() {
       if (!firebaseReady) return Promise.reject(new Error('Firebase not available'));
+      var isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+      // Inside the native iOS app, Firebase's web popup flow is refused by Google
+      // (auth/operation-not-supported-in-this-environment) - use the native plugin instead,
+      // then hand its credential to the web SDK so our existing onAuthStateChanged listener
+      // (and the rest of the app, which only knows about the web SDK) still works unchanged.
+      if (isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication) {
+        return window.Capacitor.Plugins.FirebaseAuthentication.signInWithGoogle().then(function(result) {
+          var idToken = result && result.credential && result.credential.idToken;
+          var accessToken = result && result.credential && result.credential.accessToken;
+          if (!idToken) return Promise.reject(new Error('No credential returned from native Google sign-in'));
+          var credential = firebase.auth.GoogleAuthProvider.credential(idToken, accessToken);
+          return firebase.auth().signInWithCredential(credential);
+        });
+      }
       return firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
     },
     sendEmailLink: function(email) {
@@ -899,7 +931,42 @@ window.girlTimeAuth = (function() {
     },
     signOut: function() {
       if (!firebaseReady) return Promise.resolve();
-      return firebase.auth().signOut();
+      var isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+      var nativeSignOut = (isNative && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication)
+        ? window.Capacitor.Plugins.FirebaseAuthentication.signOut().catch(function() {})
+        : Promise.resolve();
+      return nativeSignOut.then(function() { return firebase.auth().signOut(); });
+    },
+    // Permanently deletes everything tied to the signed-in account: every synced event,
+    // routine and remembered duration in Firestore, then the Firebase Auth account itself.
+    deleteAccount: function() {
+      if (!firebaseReady) return Promise.reject(new Error('Firebase not available'));
+      var user = firebase.auth().currentUser;
+      if (!user) return Promise.reject(new Error('Not signed in'));
+      var uid = user.uid;
+
+      function deleteAllData() {
+        return firebase.firestore().collection('users').doc(uid).collection('kv').get().then(function(snap) {
+          var batch = firebase.firestore().batch();
+          snap.forEach(function(doc) { batch.delete(doc.ref); });
+          return batch.commit();
+        });
+      }
+
+      function deleteAuthUser() {
+        return user.delete().catch(function(err) {
+          if (err && err.code === 'auth/requires-recent-login') {
+            // Firebase requires a fresh sign-in before it'll allow deleting the account -
+            // re-authenticate with the same method (native plugin or web popup) and retry once.
+            return window.girlTimeAuth.signInWithGoogle().then(function() {
+              return firebase.auth().currentUser.delete();
+            });
+          }
+          throw err;
+        });
+      }
+
+      return deleteAllData().then(deleteAuthUser);
     }
   };
 })();
@@ -1007,7 +1074,7 @@ window.girlTimeAuth = (function() {
     routinesTab: 'routines',
     routines: [],
     saveNameInput: '',
-    stepMemory: {},    // { normalizedLabel: {hours, minutes} } — remembered durations per step label
+    stepMemory: {},    // { normalizedLabel: {hours, minutes} } - remembered durations per step label
     user: null,        // signed-in Firebase user, or null if not signed in / syncing disabled
     emailInput: '',
     emailLinkSent: false
@@ -1067,18 +1134,18 @@ window.girlTimeAuth = (function() {
     [['brush teeth', 'teeth'], '🪥'],
     [['skincare', 'moistur'], '🧴'],
     [['makeup', 'mascara'], '💄'],
-    [['hair', 'blow dry', 'curl'], '💇'],
+    [['hair', 'blow dry', 'curl'], '💇‍♀️'],
     [['dress', 'outfit', 'clothes', 'change'], '👗'],
     [['shoes'], '👟'],
     [['iron'], '👔'],
     [['pack', 'bag'], '🎒'],
-    [['breakfast', 'lunch', 'dinner', 'eat', 'meal', 'cook'], '🍳'],
+    [['breakfast', 'lunch', 'dinner', 'eat', 'meal', 'cook'], '🍽️'],
     [['coffee', 'tea'], '☕'],
     [['medicine', 'meds', 'vitamin'], '💊'],
-    [['workout', 'gym', 'exercise', 'run'], '🏋️'],
-    [['yoga', 'stretch', 'meditat'], '🧘'],
+    [['workout', 'gym', 'exercise', 'run'], '🏋️‍♀️'],
+    [['yoga', 'stretch', 'meditat'], '🧘‍♀️'],
     [['walk dog', 'dog', 'pet', 'cat'], '🐶'],
-    [['kids', 'school', 'drop off'], '🧒'],
+    [['kids', 'school', 'drop off'], '👧'],
     [['clean', 'tidy', 'dishes', 'laundry'], '🧹'],
     [['email', 'work', 'laptop', 'call'], '💻'],
     [['charge', 'phone', 'battery'], '🔋'],
@@ -1091,12 +1158,23 @@ window.girlTimeAuth = (function() {
     [['bus'], '🚌'],
     [['bike', 'cycle'], '🚲'],
     [['uber', 'lyft', 'taxi', 'cab', 'ride'], '🚕'],
-    [['walk'], '🚶'],
+    [['walk'], '🚶‍♀️'],
     [['drive', 'car'], '🚗'],
     [['piano', 'practice', 'lesson', 'instrument'], '🎹'],
-    [['party', 'celebrat'], '🎉']
+    [['party', 'celebrat'], '🎉'],
+    [['nail', 'manicure', 'pedicure', 'polish'], '💅'],
+    [['jewel', 'earring', 'necklace', 'accessor'], '💍'],
+    [['shave', 'wax'], '🪒'],
+    [['mask', 'facial'], '🧖‍♀️'],
+    [['sleep', 'bedtime'], '😴'],
+    [['shop', 'errand', 'grocer'], '🛍️'],
+    [['gift', 'present', 'wrap'], '🎁'],
+    [['doctor', 'dentist', 'appointment'], '🩺'],
+    [['water', 'hydrat'], '💧'],
+    [['photo', 'selfie', 'picture'], '📸'],
+    [['skat'], '⛸️']
   ];
-  var DEFAULT_STEP_EMOJI = '⏰';
+  var DEFAULT_STEP_EMOJI = '✨';
 
   function guessStepEmoji(label) {
     if (!label) return DEFAULT_STEP_EMOJI;
@@ -1223,10 +1301,10 @@ window.girlTimeAuth = (function() {
     var totalMin = row.children.reduce(function(sum, c) { return sum + (c.hours || 0) * 60 + (c.minutes || 0); }, 0);
     var startLabel = relative ? elapsedLabel(row.start) : minutesToClock(row.start);
     var endLabel = relative ? elapsedLabel(row.end) : minutesToClock(row.end);
-    var html = '<div class="step-row chunk-header" data-emoji="&#129513;" data-event="' + eventId + '" data-id="' + row.id + '">';
+    var html = '<div class="step-row chunk-header" data-emoji="&#127872;" data-event="' + eventId + '" data-id="' + row.id + '">';
     html += '  <div class="step-time">' + startLabel + '</div>';
     html += '  <div class="step-info"' + (interactive ? ' data-action="toggle-chunk" data-event="' + eventId + '" data-id="' + row.id + '" style="cursor:pointer;"' : '') + '>';
-    html += '    <div class="step-label">' + esc(row.name) + ' <span class="chunk-badge">group</span> <span class="chunk-chevron">' + (row.collapsed ? '&#9656;' : '&#9662;') + '</span></div>';
+    html += '    <div class="step-label">' + esc(row.name) + ' <span class="chunk-badge chunk-pill">mini routine <span class="chunk-chevron' + (row.collapsed ? '' : ' open') + '"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1 L8.5 5 L2.5 9 Z" fill="currentColor"/></svg></span></span></div>';
     html += '    <div class="step-duration">' + row.children.length + ' step' + (row.children.length === 1 ? '' : 's') + ' · ' + durLabel(Math.floor(totalMin / 60), totalMin % 60) + ' · until ' + endLabel + '</div>';
     html += '  </div>';
     if (interactive) {
@@ -1249,7 +1327,7 @@ window.girlTimeAuth = (function() {
   function renderTimelineHTML(sched, eventName, interactive, eventId) {
     var html = '<div class="timeline">';
     if (!sched.rows.length) {
-      html += '<div class="empty-note">No steps yet — add your first one below (like "shower" or "drive"). Drag the handle to reorder anytime.</div>';
+      html += '<div class="empty-note">No steps yet - add your first one below (like "shower" or "drive"). Drag the handle to reorder anytime.</div>';
     } else {
       sched.rows.forEach(function(row) {
         if (row.kind === 'chunk') {
@@ -1271,7 +1349,7 @@ window.girlTimeAuth = (function() {
   function renderRelativeTimelineHTML(relSched, interactive, eventId) {
     var html = '<div class="timeline relative-timeline">';
     if (!relSched.rows.length) {
-      html += '<div class="empty-note">No steps yet — add your first one below. Drag the handle to reorder anytime.</div>';
+      html += '<div class="empty-note">No steps yet - add your first one below. Drag the handle to reorder anytime.</div>';
     } else {
       relSched.rows.forEach(function(row) {
         if (row.kind === 'chunk') {
@@ -1582,7 +1660,7 @@ window.girlTimeAuth = (function() {
     ev.steps = r.steps.map(function(s) { return { id: uid(), label: s.label, hours: s.hours, minutes: s.minutes }; });
     state.modal = null;
     debounceSaveSession();
-    showToast('Loaded "' + r.name + '" — ' + ev.steps.length + ' step' + (ev.steps.length === 1 ? '' : 's'));
+    showToast('Loaded "' + r.name + '" - ' + ev.steps.length + ' step' + (ev.steps.length === 1 ? '' : 's'));
     render();
     if (!ev.time) {
       var timeInput = document.getElementById('eventTime-' + ev.id);
@@ -1620,6 +1698,7 @@ window.girlTimeAuth = (function() {
     return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  var renderedModal = null;
   function render() {
     var app = document.getElementById('app');
     if (!state.loaded) {
@@ -1639,7 +1718,7 @@ window.girlTimeAuth = (function() {
     html += '</div>';
 
     if (!state.events.length) {
-      html += '<div class="empty-msg">No events yet — add one below.</div>';
+      html += '<div class="empty-msg">No events yet - add one below.</div>';
     }
 
     state.events.forEach(function(ev, idx) {
@@ -1651,7 +1730,7 @@ window.girlTimeAuth = (function() {
         var prev = state.events[idx - 1];
         var prevMin = timeStrToMinutes(prev.time);
         if (prevMin !== null && prevMin <= sched.eventMin && sched.startOverall < prevMin) {
-          html += '<div class="warning-banner"><span class="glyph">&#9888;&#65039;</span><span>Heads up — getting ready for ' +
+          html += '<div class="warning-banner"><span class="glyph emoji">&#9888;&#65039;</span><span>Heads up - getting ready for ' +
             esc(ev.name || 'this event') + ' would need to start at ' + minutesToClock(sched.startOverall) +
             ', before ' + esc(prev.name || 'your previous event') + ' at ' + minutesToClock(prevMin) +
             '. You may not have enough time in between.</span></div>';
@@ -1696,9 +1775,11 @@ window.girlTimeAuth = (function() {
       html += '  </div>';
       html += '  <div class="add-step-btn-row">';
       html += '    <button class="primary-btn" data-action="add-step" data-event="' + ev.id + '"' + ((ev.isMiniMode || sched.valid) ? '' : ' disabled') + '>+ add step</button>';
-      html += '    <button class="remember-btn" type="button" data-action="remember-only" data-event="' + ev.id + '" title="Remember this duration without adding a step">&#128190;</button>';
+      html += '    <button class="remember-btn emoji" type="button" data-action="remember-only" data-event="' + ev.id + '" title="Remember this duration without adding a step">&#128190;</button>';
       html += '  </div>';
-      html += '  <button class="primary-btn ghost" data-action="open-insert-chunk" data-event="' + ev.id + '" style="margin-top:8px;">+ add a saved ' + (ev.isMiniMode ? 'routine' : 'mini routine') + '</button>';
+      if (!ev.isMiniMode) {
+        html += '  <button class="primary-btn ghost" data-action="open-insert-chunk" data-event="' + ev.id + '" style="margin-top:8px;">+ add a saved mini routine</button>';
+      }
       html += '</div>';
 
       if (ev.isMiniMode) {
@@ -1716,7 +1797,7 @@ window.girlTimeAuth = (function() {
         html += renderTimelineHTML(sched, ev.name, true, ev.id);
       } else if (ev.steps.length) {
         html += '<div class="empty-msg">' + ev.steps.length + ' step' + (ev.steps.length === 1 ? '' : 's') +
-          ' loaded — set an event time above to see your schedule.</div>';
+          ' loaded - set an event time above to see your schedule.</div>';
       } else {
         html += '<div class="empty-msg">Set an event time above to start building this schedule.</div>';
       }
@@ -1726,10 +1807,10 @@ window.girlTimeAuth = (function() {
       html += '</div>'; // .event-section
     });
 
-    // "+ add another event" button removed for now — addEvent() still works if re-enabled later
+    // "+ add another event" button removed for now - addEvent() still works if re-enabled later
 
     html += '<div class="app-footer">';
-    html += '  <div>&#127800; created by Marina in sept 2026</div>';
+    html += '  <div><span class="emoji">&#127800;</span> created by Marina in sept 2026</div>';
     html += '  <div>last updated: sept 2026</div>';
     html += '  <div><a href="privacy.html" style="color:inherit;text-decoration:underline;">privacy policy</a></div>';
     html += '</div>';
@@ -1742,12 +1823,18 @@ window.girlTimeAuth = (function() {
       html += renderExampleModal();
     } else if (state.modal === 'confirm-reset') {
       html += renderResetConfirmModal();
+    } else if (state.modal === 'confirm-delete-account') {
+      html += renderDeleteAccountConfirmModal();
     } else if (state.modal === 'edit-step') {
       html += renderEditStepModal();
     } else if (state.modal === 'account') {
       html += renderAccountModal();
     }
 
+    if (state.modal && state.modal === renderedModal) {
+      html = html.replace('class="modal-backdrop"', 'class="modal-backdrop no-anim"').replace('class="modal-sheet"', 'class="modal-sheet no-anim"');
+    }
+    renderedModal = state.modal;
     app.innerHTML = html;
     attachHandlers();
   }
@@ -1768,9 +1855,11 @@ window.girlTimeAuth = (function() {
     } else {
       html += '<div class="modal-title">my saved routines</div>';
       var tab = state.routinesTab || 'routines';
+      var nMini = state.routines.filter(function(r) { return r.isMini; }).length;
+      var nRoutines = state.routines.length - nMini;
       html += '<div class="routines-tabs">';
-      html += '  <button class="routines-tab' + (tab === 'routines' ? ' active' : '') + '" data-action="switch-routines-tab" data-id="routines">routines</button>';
-      html += '  <button class="routines-tab' + (tab === 'mini' ? ' active' : '') + '" data-action="switch-routines-tab" data-id="mini">mini routines</button>';
+      html += '  <button class="routines-tab' + (tab === 'routines' ? ' active' : '') + '" data-action="switch-routines-tab" data-id="routines">routines <span class="tab-count">' + nRoutines + '</span></button>';
+      html += '  <button class="routines-tab' + (tab === 'mini' ? ' active' : '') + '" data-action="switch-routines-tab" data-id="mini">mini routines <span class="tab-count">' + nMini + '</span></button>';
       html += '</div>';
       list = state.routines.filter(function(r) { return tab === 'mini' ? r.isMini : !r.isMini; });
       emptyMsg = tab === 'mini'
@@ -1778,6 +1867,7 @@ window.girlTimeAuth = (function() {
         : 'No saved routines yet. Build a schedule, then tap "save as routine".';
     }
 
+    html += '<div class="routines-list">';
     if (!list.length) {
       html += '<div class="empty-msg">' + emptyMsg + '</div>';
     } else {
@@ -1799,6 +1889,7 @@ window.girlTimeAuth = (function() {
         html += '</div>';
       });
     }
+    html += '</div>';
     html += '</div></div>';
     return html;
   }
@@ -1836,12 +1927,16 @@ window.girlTimeAuth = (function() {
     var html = '<div class="modal-backdrop" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
-    html += '<div class="modal-title">save this schedule</div>';
+    html += '<div class="modal-title">' + (ev && ev.isMiniMode ? 'save this mini routine' : 'save this schedule') + '</div>';
     html += '<label class="field-label" for="routineName">name it</label>';
-    html += '<input type="text" id="routineName" placeholder="e.g. date night, gym morning" value="' + esc(state.saveNameInput) + '">';
-    html += '<div class="warning-text" style="margin-top:12px;">Save as a <strong>routine</strong> to reload the whole event (name, time, and steps) later — or as a <strong>mini routine</strong> to reuse just the steps as a group inside other events.</div>';
+    html += '<input type="text" id="routineName" placeholder="' + (ev && ev.isMiniMode ? 'e.g. bathroom routine, gym bag' : 'e.g. date night, gym morning') + '" value="' + esc(state.saveNameInput) + '">';
+    if (ev && ev.isMiniMode) {
+      html += '<button class="primary-btn" data-action="confirm-save-mini" data-event="' + evId + '" style="margin-top:12px;">save as mini routine</button>';
+    } else {
+      html += '<div class="warning-text" style="margin-top:12px;">Save as a <strong>routine</strong> to reload the whole event (name, time, and steps) later - or as a <strong>mini routine</strong> to reuse just the steps as a group inside other events.</div>';
     html += '<button class="primary-btn" data-action="confirm-save" data-event="' + evId + '">save as routine</button>';
     html += '<button class="primary-btn ghost" data-action="confirm-save-mini" data-event="' + evId + '" style="margin-top:8px;">save as mini routine</button>';
+    }
     html += '</div></div>';
     return html;
   }
@@ -1855,19 +1950,38 @@ window.girlTimeAuth = (function() {
       html += '<div class="modal-title">synced</div>';
       html += '<div class="warning-text">Signed in as ' + esc(state.user.email || '') + '. Your events, routines, and remembered step durations sync to this account.</div>';
       html += '<button class="primary-btn ghost" data-action="do-sign-out">sign out</button>';
+      html += '<button class="primary-btn ghost danger-text" data-action="open-delete-account-confirm" style="margin-top:8px;">delete my account</button>';
     } else {
       html += '<div class="modal-title">sign in to sync</div>';
       html += '<div class="warning-text">Sign in to keep your events, routines, and remembered durations synced to your account instead of just this one browser.</div>';
       html += '<button class="primary-btn" data-action="do-sign-in-google">sign in with Google</button>';
-      html += '<div style="text-align:center;font-size:12px;color:var(--ink-faint);margin:14px 0;">or</div>';
-      if (state.emailLinkSent) {
-        html += '<div class="warning-text">Check your email for a sign-in link — opening it on this device will finish signing you in.</div>';
-      } else {
-        html += '<label class="field-label" for="emailInput">email</label>';
-        html += '<input type="text" inputmode="email" autocomplete="email" id="emailInput" placeholder="you@example.com" value="' + esc(state.emailInput) + '">';
-        html += '<button class="primary-btn ghost" data-action="do-send-email-link" style="margin-top:10px;">email me a sign-in link</button>';
+      // Email-link sign-in depends on a real http/https address and on the link routing back into
+      // this exact app when tapped from Mail - neither holds up inside the native app, so it's
+      // web-only for now; Google sign-in (via the native plugin) is what the app uses instead.
+      var isNativeApp = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+      if (!isNativeApp) {
+        html += '<div style="text-align:center;font-size:12px;color:var(--ink-faint);margin:14px 0;">or</div>';
+        if (state.emailLinkSent) {
+          html += '<div class="warning-text">Check your email for a sign-in link - opening it on this device will finish signing you in.</div>';
+        } else {
+          html += '<label class="field-label" for="emailInput">email</label>';
+          html += '<input type="text" inputmode="email" autocomplete="email" id="emailInput" placeholder="you@example.com" value="' + esc(state.emailInput) + '">';
+          html += '<button class="primary-btn ghost" data-action="do-send-email-link" style="margin-top:10px;">email me a sign-in link</button>';
+        }
       }
     }
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderDeleteAccountConfirmModal() {
+    var html = '<div class="modal-backdrop modal-top" data-action="close-modal">';
+    html += '<div class="modal-sheet">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">delete your account?</div>';
+    html += '<div class="warning-text">This permanently deletes your account and everything synced to it - every event, routine, and remembered duration. This can\'t be undone. Anything only saved in this browser\'s local storage (not synced) won\'t be affected.</div>';
+    html += '<button class="primary-btn danger" data-action="confirm-delete-account">yes, delete my account</button>';
+    html += '<button class="primary-btn ghost" data-action="close-modal" style="margin-top:8px;">cancel</button>';
     html += '</div></div>';
     return html;
   }
@@ -1892,9 +2006,9 @@ window.girlTimeAuth = (function() {
     html += '<div class="modal-title">how it works</div>';
     html += '<ol class="howto-list">';
     html += '  <li>Set an event name and time</li>';
-    html += '  <li>Add the steps you need before it — start with whatever comes right before the event, then work backward (you can always drag to reorder)</li>';
+    html += '  <li>Add the steps you need before it - start with whatever comes right before the event, then work backward (you can always drag to reorder)</li>';
     html += '  <li>See your full schedule and know exactly when to start</li>';
-    html += '  <li>Got a set of steps you reuse a lot, like your shower + hair routine? Check "this is a mini routine" when saving it (no time needed) — then drop it into any other event as one reusable group</li>';
+    html += '  <li>Got a set of steps you reuse a lot, like your shower + hair routine? Check "this is a mini routine" when saving it (no time needed) - then drop it into any other event as one reusable group</li>';
     html += '</ol>';
     html += '<div class="example-preview">';
     html += '  <div class="startby"><div class="eyebrow">start by</div><div class="time">' + minutesToClock(exSched.startOverall) + '</div></div>';
@@ -1920,17 +2034,20 @@ window.girlTimeAuth = (function() {
       });
 
       var timeEl = document.getElementById('eventTime-' + ev.id);
-      if (timeEl) timeEl.addEventListener('input', function(e) {
-        var cursorPos = e.target.selectionStart;
-        ev.time = e.target.value;
-        debounceSaveSession();
-        render();
-        var again = document.getElementById('eventTime-' + ev.id);
-        if (again) {
-          again.focus();
-          try { again.setSelectionRange(cursorPos, cursorPos); } catch (err) {}
-        }
-      });
+      if (timeEl) {
+        timeEl.addEventListener('input', function(e) {
+          ev.time = e.target.value;
+          debounceSaveSession();
+        });
+        timeEl.addEventListener('change', function(e) {
+          ev.time = e.target.value;
+          debounceSaveSession();
+          render();
+        });
+        timeEl.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') e.target.blur();
+        });
+      }
 
       var miniEl = document.getElementById('isMini-' + ev.id);
       if (miniEl) miniEl.addEventListener('change', function(e) {
@@ -1977,10 +2094,13 @@ window.girlTimeAuth = (function() {
       var mem = state.stepMemory[normalizeLabel(e.target.value)];
       if (mem && (mem.hours || mem.minutes)) {
         hintEl.style.display = 'inline-block';
-        hintEl.textContent = '💡 usually ' + durLabel(mem.hours, mem.minutes) + ' — tap to use';
+        hintEl.textContent = '💡 usually ' + durLabel(mem.hours, mem.minutes) + ' - tap to use';
         hintEl.onclick = function() {
           if (hoursEl) hoursEl.value = mem.hours || '';
           if (minutesEl) minutesEl.value = mem.minutes || '';
+          var card = labelEl.closest('.add-step-card');
+          var addBtn = card && card.querySelector('[data-action="add-step"]');
+          if (addBtn && !addBtn.disabled) addBtn.click();
         };
       } else {
         hintEl.style.display = 'none';
@@ -2078,7 +2198,7 @@ window.girlTimeAuth = (function() {
       else {
         window.girlTimeAuth.signInWithGoogle().catch(function(err) {
           console.error('google sign-in failed', err);
-          showToast('Sign-in failed — try again');
+          showToast('Sign-in failed - try again');
         });
       }
     } else if (action === 'do-send-email-link') {
@@ -2091,13 +2211,28 @@ window.girlTimeAuth = (function() {
           render();
         }).catch(function(err) {
           console.error('send email link failed', err);
-          showToast('Could not send email — check the address and try again');
+          showToast('Could not send email - check the address and try again');
         });
       }
     } else if (action === 'do-sign-out') {
       if (window.girlTimeAuth) window.girlTimeAuth.signOut();
       state.modal = null;
       render();
+    } else if (action === 'open-delete-account-confirm') {
+      state.modal = 'confirm-delete-account';
+      render();
+    } else if (action === 'confirm-delete-account') {
+      if (window.girlTimeAuth) {
+        showToast('Deleting your account…');
+        window.girlTimeAuth.deleteAccount().then(function() {
+          state.modal = null;
+          showToast('Your account has been deleted');
+          render();
+        }).catch(function(err) {
+          console.error('account deletion failed', err);
+          showToast('Could not delete account - try again');
+        });
+      }
     } else if (action === 'close-modal') {
       if (btn.classList.contains('modal-backdrop') && e.target !== btn) return; // click landed inside the sheet, not on the backdrop itself
       state.modal = null;
@@ -2212,7 +2347,7 @@ window.girlTimeAuth = (function() {
 
     if (authCallCount === 1) {
       // First report of auth state (may be null momentarily while Firebase resolves
-      // a persisted session) — kick off the normal initial data load either way.
+      // a persisted session) - kick off the normal initial data load either way.
       loadInitial();
       return;
     }
@@ -2239,7 +2374,7 @@ window.girlTimeAuth = (function() {
       }
     }).then(function() {
       state.modal = null;
-      showToast('Signed in — synced');
+      showToast('Signed in - synced');
       loadInitial();
     }).catch(function(err) {
       console.error('sign-in sync failed', err);
@@ -2258,6 +2393,17 @@ window.girlTimeAuth = (function() {
       window.girlTimeAuth.onChange(handleAuthChange);
     } else {
       loadInitial();
+    }
+
+    // Native app only: the status bar defaults to a dark overlay style, which looks
+    // heavy-handed against this app's light pastel background - switch it to a light
+    // style (dark icons/text) with no background overlay so it blends in instead.
+    if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+      var StatusBar = window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar;
+      if (StatusBar) {
+        // setOverlaysWebView is Android-only (iOS ignores it) - setStyle is the one that matters here
+        StatusBar.setStyle({ style: 'LIGHT' }).catch(function() {});
+      }
     }
   }
 

@@ -1,0 +1,11 @@
+{
+  "appId": "app.girltime",
+  "appName": "girl time",
+  "webDir": "docs",
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": false,
+      "providers": ["google.com"]
+    }
+  }
+}

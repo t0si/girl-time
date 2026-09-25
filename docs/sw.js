@@ -1,6 +1,6 @@
 // Simple network-first service worker for "girl time".
 // Bump CACHE_NAME whenever you push an update so old cached copies get cleared out.
-var CACHE_NAME = 'girl-time-v2';
+var CACHE_NAME = 'girl-time-v3';
 var CORE_ASSETS = [
   './',
   './index.html',
@@ -34,7 +34,7 @@ self.addEventListener('activate', function(event) {
 
 // Network-first for same-origin requests: always try to get the latest version,
 // fall back to the cached copy when offline. This matters while the app is still
-// actively changing — a cache-first strategy would leave visitors stuck on old code.
+// actively changing - a cache-first strategy would leave visitors stuck on old code.
 self.addEventListener('fetch', function(event) {
   var req = event.request;
   if (req.method !== 'GET') return;

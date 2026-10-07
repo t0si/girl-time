@@ -847,6 +847,7 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area
 .inline-check.on{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#D77A9A;vertical-align:-3px}
 .inline-check.on::after{content:"";width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
 .check-hint{font-size:13px;color:#B65D80;text-align:center;margin:0 0 6px}
+.modal-sheet{max-height:calc(100% - 20px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 </style>
 </head>
 <body>
@@ -2553,6 +2554,17 @@ window.girlTimeAuth = (function() {
       });
     });
   }
+})();
+</script>
+<script>
+(function() {
+  document.addEventListener('focusin', function(e) {
+    var el = e.target;
+    if (!el || !el.matches || !el.matches('input, textarea')) return;
+    setTimeout(function() {
+      try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) {}
+    }, 300);
+  });
 })();
 </script>
 </body>

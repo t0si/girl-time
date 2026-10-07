@@ -872,6 +872,12 @@ body:has(.modal-backdrop.modal-top)::before{display:none}
 .step-row::before{transition:background-color .25s ease,border-color .25s ease}
 .step-row.step-done .step-time,.step-row.step-done .step-info{opacity:.55}
 .modal-sheet{position:relative}
+.rem-list{background:#fff;border-radius:14px;padding:4px 14px;margin:0 0 10px}
+.rem-row{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:14px;color:#5E2A45;border-bottom:1px dashed #F0DDE3}
+.rem-row:last-child{border-bottom:none}
+.rem-time{margin-left:auto;font-size:12px;color:var(--ink-faint)}
+.rem-note{font-size:12px;color:var(--ink-faint);margin:0 0 14px}
+.primary-btn.ghost.rem-set{background:#FDF0F4}
 </style>
 </head>
 <body>
@@ -1428,6 +1434,7 @@ window.girlTimeAuth = (function() {
           events: state.events, settings: state.settings || {}
         }), false).catch(function(e) { console.error('session save failed', e); });
       } catch (e) { console.error('session save error', e); }
+      refreshAllReminders();
     }, 350);
   }
 
@@ -1716,7 +1723,108 @@ window.girlTimeAuth = (function() {
   }
 
   function applySettings(parsed) {
-    state.settings = Object.assign({ showCheckboxes: false }, (parsed && parsed.settings) || {});
+    state.settings = Object.assign({ showCheckboxes: false, alertOffset: 5 }, (parsed && parsed.settings) || {});
+  }
+
+  function isNativeApp() { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+  function notifPlugin() { return isNativeApp() && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications; }
+  function alertOffset() { var o = state.settings && state.settings.alertOffset; return (o === undefined || o === null) ? 5 : o; }
+
+  function reminderAlerts(ev, dateStr) {
+    var sched = computeSchedule(ev.time, ev.steps);
+    if (!sched.valid) return [];
+    var off = alertOffset();
+    var flat = [];
+    sched.rows.forEach(function(r) {
+      if (r.kind === 'chunk') r.children.forEach(function(c) { flat.push(Object.assign({}, c, { chunkId: r.id })); });
+      else flat.push(r);
+    });
+    var first = flat[0];
+    var alerts = [{
+      emoji: '\uD83C\uDF80', label: 'time to start getting ready', min: sched.startOverall - off,
+      title: off ? ('start getting ready in ' + off + ' min \uD83C\uDF80') : 'time to start getting ready \uD83C\uDF80',
+      body: (ev.name || 'your event') + (first ? ' \u00B7 first up: ' + first.emoji + ' ' + first.label : ''),
+      at: dateAtMinutes(dateStr, sched.startOverall - off)
+    }];
+    flat.forEach(function(r) {
+      var ref = findStepRef(ev.id, r.id, r.chunkId);
+      if (ref && ref.notify) {
+        alerts.push({
+          emoji: r.emoji, label: r.label, min: r.start - off,
+          title: (off ? 'in ' + off + ' min: ' : '') + r.emoji + ' ' + r.label,
+          body: durLabel(r.hours, r.minutes) + ' \u00B7 until ' + minutesToClock(r.end),
+          at: dateAtMinutes(dateStr, r.start - off)
+        });
+      }
+    });
+    return alerts;
+  }
+
+  function refreshAllReminders() {
+    var LN = notifPlugin();
+    if (!LN) return Promise.resolve();
+    return LN.getPending().then(function(res) {
+      var pend = (res && res.notifications) || [];
+      if (pend.length) return LN.cancel({ notifications: pend.map(function(n) { return { id: n.id }; }) });
+    }).catch(function() {}).then(function() {
+      var list = [];
+      var nextId = 1;
+      state.events.forEach(function(ev) {
+        if (!ev.reminder || ev.isMiniMode) return;
+        reminderAlerts(ev, ev.reminder.date).forEach(function(a) {
+          if (a.at.getTime() > Date.now() + 5000) {
+            list.push({ id: nextId++, title: a.title, body: a.body, schedule: { at: a.at, allowWhileIdle: true } });
+          }
+        });
+      });
+      if (list.length) return LN.schedule({ notifications: list });
+    }).catch(function(e) { console.error('reminder scheduling failed', e); });
+  }
+
+  window.gtSetRemDate = function(v) { if (v) { state.remDate = v; render(); } };
+
+  function renderRemindersModal() {
+    var ev = findEvent(state.modalEventId);
+    if (!ev) return '';
+    var sched = computeSchedule(ev.time, ev.steps);
+    if (!sched.valid) return '';
+    var todayStr = ymd(new Date());
+    var tmw = new Date(); tmw.setDate(tmw.getDate() + 1);
+    var tomorrowStr = ymd(tmw);
+    var sel = state.remDate || (ev.reminder && ev.reminder.date) || calDefaultDate(ev);
+    var choice = sel === todayStr ? 'today' : (sel === tomorrowStr ? 'tomorrow' : 'other');
+    var off = alertOffset();
+    var alerts = reminderAlerts(ev, sel);
+    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    html += '<div class="modal-sheet">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">set reminders</div>';
+    html += '<div class="warning-text" style="margin-top:0;">' + esc(ev.name || 'your event') + ' \u00B7 start by ' + minutesToClock(sched.startOverall) + '</div>';
+    html += '<div class="field-label">day</div>';
+    html += '<div class="cal-chips">';
+    html += '<button class="cal-chip' + (choice === 'today' ? ' on' : '') + '" data-action="rem-pick" data-id="today">today</button>';
+    html += '<button class="cal-chip' + (choice === 'tomorrow' ? ' on' : '') + '" data-action="rem-pick" data-id="tomorrow">tomorrow</button>';
+    html += '<label class="cal-chip cal-chip-other' + (choice === 'other' ? ' on' : '') + '"><span class="emoji">&#128197;</span><span>other</span><input type="date" id="remDate" value="' + sel + '" onchange="window.gtSetRemDate && window.gtSetRemDate(this.value)" aria-label="pick a day"></label>';
+    html += '</div>';
+    html += '<div class="cal-chosen">' + calLabel(sel) + '</div>';
+    html += '<div class="field-label">you\'ll get</div>';
+    html += '<div class="rem-list">';
+    alerts.forEach(function(a) {
+      html += '<div class="rem-row"><span class="emoji">' + a.emoji + '</span>' + esc(a.label) + '<span class="rem-time">' + minutesToClock(a.min) + '</span></div>';
+    });
+    html += '</div>';
+    if (alerts.length && alerts[0].at.getTime() < Date.now()) {
+      html += '<div class="rem-note" style="color:#B65D80;">some of these times have already passed for this day</div>';
+    }
+    html += '<div class="rem-note">' + (off ? 'alerts come ' + off + ' min early' : 'alerts come right on time') + ' \u00B7 change in settings. turn on more step alerts with &#9998; on each step.</div>';
+    if (ev.reminder) {
+      html += '<button class="primary-btn" data-action="confirm-reminders">update reminders</button>';
+      html += '<button class="primary-btn ghost" data-action="cancel-reminders" style="margin-top:8px;">cancel reminders</button>';
+    } else {
+      html += '<button class="primary-btn" data-action="confirm-reminders">set reminders</button>';
+    }
+    html += '</div></div>';
+    return html;
   }
 
   function renderMenuModal() {
@@ -1743,6 +1851,15 @@ window.girlTimeAuth = (function() {
     html += '<div class="modal-title">settings</div>';
     html += '<div class="settings-opt"><div><div class="settings-opt-label">show checkboxes</div><div class="settings-opt-sub">tap each step&#39;s emoji to check it off</div></div>';
     html += '<button class="settings-switch' + (st.showCheckboxes ? ' on' : '') + '" data-action="toggle-setting" data-id="showCheckboxes" role="switch" aria-checked="' + (st.showCheckboxes ? 'true' : 'false') + '" aria-label="show checkboxes"></button></div>';
+    if (isNativeApp()) {
+      var curOff = alertOffset();
+      var offs = [[0, 'at start'], [5, '5 min'], [10, '10'], [15, '15'], [30, '30']];
+      html += '<div class="settings-opt" style="display:block;margin-top:10px;"><div class="settings-opt-label">alert timing</div><div class="settings-opt-sub">how early reminders arrive</div><div class="cal-chips" style="margin-top:10px;">';
+      offs.forEach(function(o) {
+        html += '<button class="cal-chip' + (curOff === o[0] ? ' on' : '') + '" data-action="set-alert-offset" data-id="' + o[0] + '">' + o[1] + '</button>';
+      });
+      html += '</div></div>';
+    }
     html += '</div></div>';
     return html;
   }
@@ -2050,6 +2167,13 @@ window.girlTimeAuth = (function() {
       if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
         html += '<button class="primary-btn ghost" data-action="open-calendar" data-event="' + ev.id + '" style="margin-top:8px;">add to calendar</button>';
       }
+      if (isNativeApp() && !ev.isMiniMode && sched && sched.valid && ev.steps.length) {
+        var remLabel = 'set reminders';
+        if (ev.reminder) {
+          remLabel = '&#128276; reminders set &middot; ' + calLabel(ev.reminder.date).split(',')[0] + ' ' + minutesToClock(sched.startOverall - alertOffset());
+        }
+        html += '<button class="primary-btn ghost' + (ev.reminder ? ' rem-set' : '') + '" data-action="open-reminders" data-event="' + ev.id + '" style="margin-top:8px;">' + remLabel + '</button>';
+      }
 
       html += '</div>'; // .event-section
     });
@@ -2066,6 +2190,8 @@ window.girlTimeAuth = (function() {
       html += renderRoutinesModal();
     } else if (state.modal === 'save') {
       html += renderSaveModal();
+    } else if (state.modal === 'reminders') {
+      html += renderRemindersModal();
     } else if (state.modal === 'menu') {
       html += renderMenuModal();
     } else if (state.modal === 'calendar') {
@@ -2170,6 +2296,9 @@ window.girlTimeAuth = (function() {
     html += '  <div class="dur-field"><label class="field-label" for="editStepHours">hours</label><input type="number" id="editStepHours" min="0" max="23" value="' + step.hours + '"></div>';
     html += '  <div class="dur-field"><label class="field-label" for="editStepMinutes">minutes</label><input type="number" id="editStepMinutes" min="0" max="59" value="' + step.minutes + '"></div>';
     html += '</div>';
+    if (isNativeApp()) {
+      html += '<div class="settings-opt" style="margin:12px 0;"><div><div class="settings-opt-label">&#128276; notify me</div><div class="settings-opt-sub">get an alert for this step</div></div><button class="settings-switch step-notify-switch' + (step.notify ? ' on' : '') + '" data-action="toggle-step-notify" role="switch" aria-label="notify me"></button></div>';
+    }
     html += '<button class="primary-btn" data-action="confirm-edit-step" data-event="' + evId + '" data-id="' + step.id + '"' + chunkAttr + '>save changes</button>';
     html += '<button class="primary-btn ghost" data-action="delete-step-from-modal" data-event="' + evId + '" data-id="' + step.id + '"' + chunkAttr + ' style="margin-top:8px;">remove this step</button>';
     html += '</div></div>';
@@ -2328,12 +2457,10 @@ window.girlTimeAuth = (function() {
     var routineNameEl = document.getElementById('routineName');
     if (routineNameEl) {
       routineNameEl.addEventListener('input', function(e) { state.saveNameInput = e.target.value; });
-      routineNameEl.focus();
       routineNameEl.select();
     }
 
     var editLabelEl = document.getElementById('editStepLabel');
-    if (editLabelEl) { editLabelEl.focus(); editLabelEl.select(); }
 
     var emailInputEl = document.getElementById('emailInput');
     if (emailInputEl) {
@@ -2397,7 +2524,13 @@ window.girlTimeAuth = (function() {
       var editLabel = document.getElementById('editStepLabel').value;
       var editHours = parseInt(document.getElementById('editStepHours').value, 10) || 0;
       var editMinutes = parseInt(document.getElementById('editStepMinutes').value, 10) || 0;
+      var nsw = document.querySelector('.step-notify-switch');
+      var nOn = nsw ? nsw.classList.contains('on') : null;
+      var srB = findStepRef(eventId, id, chunkId);
+      if (srB && nOn !== null) srB.notify = nOn;
       editStep(eventId, id, editLabel, editHours, editMinutes, chunkId);
+      var srA = findStepRef(eventId, id, chunkId);
+      if (srA && nOn !== null && srA.notify !== nOn) { srA.notify = nOn; debounceSaveSession(); }
     } else if (action === 'delete-step-from-modal') {
       state.modal = null;
       deleteStep(eventId, id, chunkId);
@@ -2487,6 +2620,49 @@ window.girlTimeAuth = (function() {
           showToast('Could not delete account - try again');
         });
       }
+    } else if (action === 'open-reminders') {
+      state.modal = 'reminders';
+      state.modalEventId = eventId;
+      state.remDate = null;
+      render();
+    } else if (action === 'rem-pick') {
+      var rd = new Date();
+      if (id === 'tomorrow') rd.setDate(rd.getDate() + 1);
+      state.remDate = ymd(rd);
+      render();
+    } else if (action === 'confirm-reminders') {
+      var evr = findEvent(state.modalEventId);
+      var LNr = notifPlugin();
+      if (evr && LNr) {
+        var remSel = state.remDate || (evr.reminder && evr.reminder.date) || calDefaultDate(evr);
+        LNr.checkPermissions().then(function(pm) {
+          if (pm && pm.display === 'granted') return pm;
+          return LNr.requestPermissions();
+        }).then(function(pm) {
+          if (!pm || pm.display !== 'granted') { showToast('Turn on notifications for girl time in iPhone Settings'); return; }
+          evr.reminder = { date: remSel };
+          state.modal = null;
+          debounceSaveSession();
+          render();
+          showToast('Reminders set \uD83D\uDD14');
+        }).catch(function(e) { console.error(e); showToast('Could not set reminders'); });
+      }
+    } else if (action === 'cancel-reminders') {
+      var evx = findEvent(state.modalEventId);
+      if (evx) {
+        delete evx.reminder;
+        state.modal = null;
+        debounceSaveSession();
+        render();
+        showToast('Reminders canceled');
+      }
+    } else if (action === 'toggle-step-notify') {
+      btn.classList.toggle('on');
+    } else if (action === 'set-alert-offset') {
+      state.settings = state.settings || {};
+      state.settings.alertOffset = parseInt(id, 10) || 0;
+      debounceSaveSession();
+      render();
     } else if (action === 'open-menu') {
       state.modal = 'menu';
       render();

@@ -854,6 +854,20 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area
 .cal-chip-other input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;margin:0;padding:0;border:none;font-size:16px;cursor:pointer}
 .cal-chosen{font-size:13px;color:#7A6870;margin:10px 0 16px}
 .add-step-btn-row .primary-btn{flex:1;width:100%}
+.menu-item{display:flex;align-items:center;gap:12px;width:100%;margin:8px 0 0;padding:13px 14px;background:#fff;border:none;border-radius:14px;font-size:15px;color:#5E2A45;text-align:left;cursor:pointer}
+.menu-ic{width:22px;text-align:center;flex-shrink:0}
+.menu-sub{font-size:12px;color:var(--ink-faint);margin-top:2px}
+.menu-chev{margin-left:auto;color:#D98AA8;font-size:20px;line-height:1}
+.modal-backdrop.menu-top{align-items:flex-start}
+.modal-backdrop.menu-top .modal-sheet{top:0;bottom:auto;margin-top:0;margin-bottom:auto;border-radius:0 0 24px 24px;padding-top:calc(env(safe-area-inset-top) + 18px);animation:menuDrop .25s ease-out}
+@keyframes menuDrop{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+body:has(.modal-backdrop.menu-top)::before{display:none}
+.modal-backdrop.menu-top .modal-close{top:calc(env(safe-area-inset-top) + 16px)}
+.modal-backdrop.menu-top .modal-close{top:calc(env(safe-area-inset-top) + 16px)}
+.modal-backdrop.modal-top .modal-close{top:calc(env(safe-area-inset-top) + 16px)}
+.modal-backdrop.modal-top{align-items:flex-start;padding:0}
+.modal-backdrop.modal-top .modal-sheet{top:0;bottom:auto;margin-top:0;margin-bottom:auto;border-radius:0 0 24px 24px;padding-top:calc(env(safe-area-inset-top) + 18px)}
+body:has(.modal-backdrop.modal-top)::before{display:none}
 </style>
 </head>
 <body>
@@ -1701,9 +1715,25 @@ window.girlTimeAuth = (function() {
     state.settings = Object.assign({ showCheckboxes: false }, (parsed && parsed.settings) || {});
   }
 
+  function renderMenuModal() {
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
+    html += '<div class="modal-sheet">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">menu</div>';
+    html += '<button class="menu-item" data-action="open-example"><span class="emoji menu-ic">&#128161;</span><span>how it works</span><span class="menu-chev">&rsaquo;</span></button>';
+    html += '<button class="menu-item" data-action="open-settings"><span class="emoji menu-ic">&#9881;&#65039;</span><span>settings</span><span class="menu-chev">&rsaquo;</span></button>';
+    if (state.user) {
+      html += '<button class="menu-item" data-action="open-account"><span class="emoji menu-ic">&#128100;</span><span>account<div class="menu-sub">' + esc(state.user.email || '') + '</div></span><span class="menu-chev">&rsaquo;</span></button>';
+    } else {
+      html += '<button class="menu-item" data-action="open-account"><span class="emoji menu-ic">&#128100;</span><span>sign in to sync</span><span class="menu-chev">&rsaquo;</span></button>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
   function renderSettingsModal() {
     var st = state.settings || {};
-    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    var html = '<div class="modal-backdrop modal-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">settings</div>';
@@ -1921,8 +1951,7 @@ window.girlTimeAuth = (function() {
     html += '  <div><div class="wordmark-row"><h1 class="wordmark">girl <span>time</span></h1></div>';
     html += '  <div class="tagline">work backward from any event to know exactly when to start</div></div>';
     html += '  <div class="header-links">';
-    html += '    <div class="header-link-row"><button class="routines-link" data-action="open-example">how it works</button><button class="gear-btn emoji" data-action="open-settings" aria-label="settings" title="settings">&#9881;&#65039;</button></div>';
-    html += '    <button class="routines-link" data-action="open-account">' + (state.user ? esc(state.user.email || 'account') : 'sign in to sync') + '</button>';
+    html += '    <button class="routines-link" data-action="open-menu">menu</button>';
     html += '  </div>';
     html += '</div>';
 
@@ -2033,6 +2062,8 @@ window.girlTimeAuth = (function() {
       html += renderRoutinesModal();
     } else if (state.modal === 'save') {
       html += renderSaveModal();
+    } else if (state.modal === 'menu') {
+      html += renderMenuModal();
     } else if (state.modal === 'calendar') {
       html += renderCalendarModal();
     } else if (state.modal === 'settings') {
@@ -2052,7 +2083,7 @@ window.girlTimeAuth = (function() {
     }
 
     if (state.modal && state.modal === renderedModal) {
-      html = html.replace('class="modal-backdrop"', 'class="modal-backdrop no-anim"').replace('class="modal-sheet"', 'class="modal-sheet no-anim"');
+      html = html.replace('class="modal-backdrop', 'class="modal-backdrop no-anim').replace('class="modal-sheet"', 'class="modal-sheet no-anim"');
     }
     renderedModal = state.modal;
     app.innerHTML = html;
@@ -2227,15 +2258,14 @@ window.girlTimeAuth = (function() {
     html += '<ol class="howto-list">';
     html += '  <li>Set an event name and time</li>';
     html += '  <li>Add the steps you need before it - start with whatever comes right before the event, then work backward (you can always drag to reorder)</li>';
-    html += '  <li>See your full schedule and know exactly when to start</li>';
     html += '  <li>Got a set of steps you reuse a lot, like your shower + hair routine? Check "this is a mini routine" when saving it (no time needed) - then drop it into any other event as one reusable group</li>';
+    html += '  <li>See your full schedule and know exactly when to start</li>';
     html += '</ol>';
     html += '<div class="example-preview">';
     html += '  <div class="startby"><div class="eyebrow">start by</div><div class="time">' + minutesToClock(exSched.startOverall) + '</div></div>';
     html += renderTimelineHTML(exSched, EXAMPLE_EVENT.name, false, 'example');
     html += '</div>';
     html += '<div class="example-caption">a 7:00 PM dinner means starting to get ready at ' + minutesToClock(exSched.startOverall) + '</div>';
-    html += '<button class="primary-btn" data-action="close-modal">got it, close</button>';
     html += '</div></div>';
     return html;
   }
@@ -2453,6 +2483,9 @@ window.girlTimeAuth = (function() {
           showToast('Could not delete account - try again');
         });
       }
+    } else if (action === 'open-menu') {
+      state.modal = 'menu';
+      render();
     } else if (action === 'open-calendar') {
       state.modal = 'calendar';
       state.modalEventId = eventId;

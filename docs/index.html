@@ -868,6 +868,9 @@ body:has(.modal-backdrop.menu-top)::before{display:none}
 .modal-backdrop.modal-top{align-items:flex-start;padding:0}
 .modal-backdrop.modal-top .modal-sheet{top:0;bottom:auto;margin-top:0;margin-bottom:auto;border-radius:0 0 24px 24px;padding-top:calc(env(safe-area-inset-top) + 18px)}
 body:has(.modal-backdrop.modal-top)::before{display:none}
+.step-row .step-time,.step-row .step-info{transition:opacity .25s ease}
+.step-row::before{transition:background-color .25s ease,border-color .25s ease}
+.step-row.step-done .step-time,.step-row.step-done .step-info{opacity:.55}
 </style>
 </head>
 <body>
@@ -1328,7 +1331,7 @@ window.girlTimeAuth = (function() {
     var stepRef = showChecks ? findStepRef(eventId, row.id, chunkId) : null;
     var isDone = !!(stepRef && stepRef.done);
     if (showChecks && chunkId) {
-      labelPrefix = '<button class="inline-check' + (isDone ? ' on' : '') + '" data-action="toggle-done" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + ' role="checkbox" aria-checked="' + (isDone ? 'true' : 'false') + '" aria-label="mark done">' + (isDone ? '' : esc(row.emoji)) + '</button> ';
+      labelPrefix = '<button class="inline-check' + (isDone ? ' on' : '') + '" data-em="' + esc(row.emoji) + '" data-action="toggle-done" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + ' role="checkbox" aria-checked="' + (isDone ? 'true' : 'false') + '" aria-label="mark done">' + (isDone ? '' : esc(row.emoji)) + '</button> ';
     }
     var html = '<div class="step-row' + (chunkId ? ' chunk-child' : '') + (isDone ? ' step-done' : '') + '"' +
       (chunkId ? '' : ' data-emoji="' + esc(row.emoji) + '"') +
@@ -2536,7 +2539,18 @@ window.girlTimeAuth = (function() {
       render();
     } else if (action === 'toggle-done') {
       var sr = findStepRef(eventId, id, chunkId);
-      if (sr) { sr.done = !sr.done; state.settings = state.settings || {}; state.settings.checkHintSeen = true; debounceSaveSession(); render(); }
+      if (sr) {
+        sr.done = !sr.done;
+        state.settings = state.settings || {};
+        state.settings.checkHintSeen = true;
+        debounceSaveSession();
+        var rowEl = btn.closest('.step-row');
+        if (rowEl) rowEl.classList.toggle('step-done', sr.done);
+        btn.classList.toggle('on', sr.done);
+        btn.setAttribute('aria-checked', sr.done ? 'true' : 'false');
+        if (btn.classList.contains('inline-check')) btn.textContent = sr.done ? '' : (btn.getAttribute('data-em') || '');
+        document.querySelectorAll('.check-hint').forEach(function(h) { h.remove(); });
+      }
     } else if (action === 'clear-checks') {
       var evc = findEvent(eventId);
       if (evc) {

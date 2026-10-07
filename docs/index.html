@@ -1622,10 +1622,43 @@ window.girlTimeAuth = (function() {
     render();
   }
 
-  function saveAsRoutine(eventId, name, isMini) {
+  function normRoutineName(n) { return (n || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+
+  function nextCopyName(base, isMini) {
+    base = base.trim().replace(/\s*\(\d+\)$/, '');
+    var taken = {};
+    state.routines.forEach(function(r) { if (!!r.isMini === !!isMini) taken[normRoutineName(r.name)] = true; });
+    var n = 2;
+    while (taken[normRoutineName(base + ' (' + n + ')')]) n++;
+    return base + ' (' + n + ')';
+  }
+
+  function renderDuplicateModal() {
+    var p = state.pendingSave || {};
+    var kind = p.isMini ? 'mini routine' : 'routine';
+    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    html += '<div class="modal-sheet">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">"' + esc(p.name || '') + '" already exists</div>';
+    html += '<div class="warning-text">you already have a ' + kind + ' with this name. replace it with this version, or keep both by saving a copy.</div>';
+    html += '<button class="primary-btn" data-action="dup-replace">replace it</button>';
+    html += '<button class="primary-btn ghost" data-action="dup-copy" style="margin-top:8px;">save as "' + esc(p.copyName || '') + '"</button>';
+    html += '<button data-action="dup-cancel" style="display:block;margin:14px auto 0;background:none;border:none;font-size:14px;color:var(--ink-faint);cursor:pointer;">cancel</button>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function saveAsRoutine(eventId, name, isMini, mode) {
     if (!name.trim()) return;
     var ev = findEvent(eventId);
     if (!ev || !ev.steps.length) { showToast("Add a step first"); return; }
+    var existing = state.routines.filter(function(r) { return !!r.isMini === !!isMini && normRoutineName(r.name) === normRoutineName(name); })[0];
+    if (existing && !mode) {
+      state.pendingSave = { eventId: eventId, name: name.trim(), isMini: !!isMini, copyName: nextCopyName(name, isMini) };
+      state.modal = 'confirm-duplicate';
+      render();
+      return;
+    }
     var flatSteps = [];
     ev.steps.forEach(function(s) {
       if (isChunk(s)) {
@@ -1642,7 +1675,14 @@ window.girlTimeAuth = (function() {
       isMini: !!isMini,
       steps: flatSteps
     };
-    state.routines.unshift(routine);
+    var replaceIdx = -1;
+    if (mode === 'replace') {
+      for (var k = 0; k < state.routines.length; k++) {
+        if (!!state.routines[k].isMini === !!isMini && normRoutineName(state.routines[k].name) === normRoutineName(name)) { replaceIdx = k; break; }
+      }
+    }
+    if (replaceIdx !== -1) { routine.id = state.routines[replaceIdx].id; state.routines[replaceIdx] = routine; }
+    else { state.routines.unshift(routine); }
     saveRoutines().then(function() {
       showToast('Saved "' + routine.name + '"' + (isMini ? ' as a mini routine' : ''));
     }).catch(function() { showToast('Could not save'); });
@@ -1811,7 +1851,7 @@ window.girlTimeAuth = (function() {
 
     html += '<div class="app-footer">';
     html += '  <div><span class="emoji">&#127800;</span> created by Marina in sept 2026</div>';
-    html += '  <div>last updated: sept 2026</div>';
+    html += '  <div>last updated: oct 2026</div>';
     html += '  <div><a href="privacy.html" style="color:inherit;text-decoration:underline;">privacy policy</a></div>';
     html += '</div>';
 
@@ -1819,6 +1859,8 @@ window.girlTimeAuth = (function() {
       html += renderRoutinesModal();
     } else if (state.modal === 'save') {
       html += renderSaveModal();
+    } else if (state.modal === 'confirm-duplicate') {
+      html += renderDuplicateModal();
     } else if (state.modal === 'example') {
       html += renderExampleModal();
     } else if (state.modal === 'confirm-reset') {
@@ -2233,6 +2275,16 @@ window.girlTimeAuth = (function() {
           showToast('Could not delete account - try again');
         });
       }
+    } else if (action === 'dup-replace') {
+      var ps = state.pendingSave; state.pendingSave = null;
+      if (ps) saveAsRoutine(ps.eventId, ps.name, ps.isMini, 'replace');
+    } else if (action === 'dup-copy') {
+      var pc = state.pendingSave; state.pendingSave = null;
+      if (pc) saveAsRoutine(pc.eventId, pc.copyName, pc.isMini, 'copy');
+    } else if (action === 'dup-cancel') {
+      state.pendingSave = null;
+      state.modal = 'save';
+      render();
     } else if (action === 'close-modal') {
       if (btn.classList.contains('modal-backdrop') && e.target !== btn) return; // click landed inside the sheet, not on the backdrop itself
       state.modal = null;

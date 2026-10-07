@@ -824,6 +824,29 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area
 .routines-tab .tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;margin-left:6px;border-radius:999px;background:#EADDDF;color:#8C7580;font-size:12px;line-height:1;vertical-align:middle}
 .routines-tab.active .tab-count{background:#F9E4EA;color:#B65D80}
 .no-anim,.no-anim *{animation:none !important;transition:none !important}
+.header-link-row{display:flex;align-items:center;gap:10px}
+.gear-btn{background:none;border:none;padding:0;margin:0;font-size:17px;line-height:1;cursor:pointer}
+.step-check{width:22px;height:22px;min-width:22px;border-radius:7px;border:1.5px solid #D98AA8;background:#fff;display:inline-flex;align-items:center;justify-content:center;padding:0;margin:0 10px 0 0;cursor:pointer;align-self:center;flex-shrink:0}
+.step-check.on{background:#D77A9A;border-color:#D77A9A}
+.step-check.on::after{content:"";width:6px;height:11px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.step-row.step-done .step-time,.step-row.step-done .step-info{opacity:.4}
+.clear-checks-btn{display:block;margin:10px auto 4px;background:none;border:none;font-size:13px;color:var(--ink-faint);text-decoration:underline;cursor:pointer}
+.settings-opt{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fff;border-radius:14px;padding:14px 16px;margin-top:4px}
+.settings-opt-label{font-size:15px;color:#5E2A45}
+.settings-opt-sub{font-size:12px;color:var(--ink-faint);margin-top:2px}
+.settings-switch{width:46px;height:28px;min-width:46px;border-radius:999px;background:#E6D9DC;border:none;position:relative;cursor:pointer;padding:0;transition:background .2s}
+.settings-switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15);transition:left .2s}
+.settings-switch.on{background:#D77A9A}
+.settings-switch.on::after{left:21px}
+.emoji-check{position:absolute;left:-45px;top:50%;transform:translateY(-50%);width:40px;height:40px;border-radius:50%;background:transparent;border:none;padding:0;margin:0;cursor:pointer;z-index:2}
+.emoji-check::after{content:"";position:absolute;left:26px;top:26px;width:11px;height:11px;border-radius:50%;background:#fff;border:1.5px solid #D98AA8}
+.emoji-check.on::after{display:none}
+.emoji-check.on::before{content:"";position:absolute;left:50%;top:50%;width:6px;height:11px;border:solid #fff;border-width:0 2px 2px 0;transform:translate(-50%,-62%) rotate(45deg)}
+.step-row.step-done:not(.chunk-child)::before{content:"";background:#D77A9A;border-color:#D77A9A}
+.inline-check{background:none;border:none;padding:0;margin:0;font:inherit;cursor:pointer;vertical-align:baseline}
+.inline-check.on{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#D77A9A;vertical-align:-3px}
+.inline-check.on::after{content:"";width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.check-hint{font-size:13px;color:#B65D80;text-align:center;margin:0 0 6px}
 </style>
 </head>
 <body>
@@ -1280,16 +1303,24 @@ window.girlTimeAuth = (function() {
     var labelPrefix = chunkId ? (row.emoji + ' ') : '';
     var startLabel = relative ? elapsedLabel(row.start) : minutesToClock(row.start);
     var endLabel = relative ? elapsedLabel(row.end) : minutesToClock(row.end);
-    var html = '<div class="step-row' + (chunkId ? ' chunk-child' : '') + '"' +
+    var showChecks = interactive && state.settings && state.settings.showCheckboxes;
+    var stepRef = showChecks ? findStepRef(eventId, row.id, chunkId) : null;
+    var isDone = !!(stepRef && stepRef.done);
+    if (showChecks && chunkId) {
+      labelPrefix = '<button class="inline-check' + (isDone ? ' on' : '') + '" data-action="toggle-done" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + ' role="checkbox" aria-checked="' + (isDone ? 'true' : 'false') + '" aria-label="mark done">' + (isDone ? '' : esc(row.emoji)) + '</button> ';
+    }
+    var html = '<div class="step-row' + (chunkId ? ' chunk-child' : '') + (isDone ? ' step-done' : '') + '"' +
       (chunkId ? '' : ' data-emoji="' + esc(row.emoji) + '"') +
       ' data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + '>';
+    if (showChecks && !chunkId) {
+      html += '  <button class="emoji-check' + (isDone ? ' on' : '') + '" data-action="toggle-done" data-event="' + eventId + '" data-id="' + row.id + '" role="checkbox" aria-checked="' + (isDone ? 'true' : 'false') + '" aria-label="mark done"></button>';
+    }
     html += '  <div class="step-time">' + startLabel + '</div>';
     html += '  <div class="step-info"><div class="step-label">' + labelPrefix + esc(row.label) + '</div>';
     html += '  <div class="step-duration">' + durLabel(row.hours, row.minutes) + ' · until ' + endLabel + '</div></div>';
     if (interactive) {
       html += '  <div class="step-actions">';
       html += '    <button class="icon-btn" data-action="edit-step" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + ' title="Edit">&#9998;</button>';
-      html += '    <button class="icon-btn delete" data-action="delete-step" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + ' title="Remove">&times;</button>';
       html += '    <span class="icon-btn drag-handle" title="Drag to reorder">&#9776;</span>';
       html += '  </div>';
     }
@@ -1369,7 +1400,7 @@ window.girlTimeAuth = (function() {
     saveTimer = setTimeout(function() {
       try {
         window.storage.set(STORAGE_KEY_SESSION, JSON.stringify({
-          events: state.events
+          events: state.events, settings: state.settings || {}
         }), false).catch(function(e) { console.error('session save failed', e); });
       } catch (e) { console.error('session save error', e); }
     }, 350);
@@ -1421,7 +1452,7 @@ window.girlTimeAuth = (function() {
       if (sessionRes.status === 'fulfilled' && sessionRes.value) {
         try { parsed = JSON.parse(sessionRes.value); } catch (e) { console.error('parse session failed', e); }
       }
-      applySessionData(parsed);
+      applySessionData(parsed); applySettings(parsed);
       if (routinesRes.status === 'fulfilled' && routinesRes.value) {
         try { state.routines = JSON.parse(routinesRes.value) || []; }
         catch (e) { console.error('parse routines failed', e); }
@@ -1441,7 +1472,7 @@ window.girlTimeAuth = (function() {
       if (v) { try { parsed = JSON.parse(v); } catch (e) {} }
       return safeGet(STORAGE_KEY_ROUTINES);
     }).then(function(v) {
-      applySessionData(parsed);
+      applySessionData(parsed); applySettings(parsed);
       if (v) { try { state.routines = JSON.parse(v) || []; } catch (e) {} }
       return safeGet(STORAGE_KEY_STEP_MEMORY);
     }).then(function(v) {
@@ -1648,6 +1679,33 @@ window.girlTimeAuth = (function() {
     return html;
   }
 
+  function findStepRef(eventId, stepId, chunkId) {
+    var ev = findEvent(eventId);
+    if (!ev) return null;
+    var list = ev.steps;
+    if (chunkId) {
+      var ch = ev.steps.find(function(x) { return x.id === chunkId; });
+      list = ch ? ch.children : [];
+    }
+    return (list || []).find(function(x) { return x.id === stepId; }) || null;
+  }
+
+  function applySettings(parsed) {
+    state.settings = Object.assign({ showCheckboxes: false }, (parsed && parsed.settings) || {});
+  }
+
+  function renderSettingsModal() {
+    var st = state.settings || {};
+    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    html += '<div class="modal-sheet">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">settings</div>';
+    html += '<div class="settings-opt"><div><div class="settings-opt-label">show checkboxes</div><div class="settings-opt-sub">tap each step&#39;s emoji to check it off</div></div>';
+    html += '<button class="settings-switch' + (st.showCheckboxes ? ' on' : '') + '" data-action="toggle-setting" data-id="showCheckboxes" role="switch" aria-checked="' + (st.showCheckboxes ? 'true' : 'false') + '" aria-label="show checkboxes"></button></div>';
+    html += '</div></div>';
+    return html;
+  }
+
   function saveAsRoutine(eventId, name, isMini, mode) {
     if (!name.trim()) return;
     var ev = findEvent(eventId);
@@ -1752,7 +1810,7 @@ window.girlTimeAuth = (function() {
     html += '  <div><div class="wordmark-row"><h1 class="wordmark">girl <span>time</span></h1></div>';
     html += '  <div class="tagline">work backward from any event to know exactly when to start</div></div>';
     html += '  <div class="header-links">';
-    html += '    <button class="routines-link" data-action="open-example">how it works</button>';
+    html += '    <div class="header-link-row"><button class="routines-link" data-action="open-example">how it works</button><button class="gear-btn emoji" data-action="open-settings" aria-label="settings" title="settings">&#9881;&#65039;</button></div>';
     html += '    <button class="routines-link" data-action="open-account">' + (state.user ? esc(state.user.email || 'account') : 'sign in to sync') + '</button>';
     html += '  </div>';
     html += '</div>';
@@ -1828,13 +1886,13 @@ window.girlTimeAuth = (function() {
         html += '  <div class="eyebrow">total time</div>';
         html += '  <div class="time">' + elapsedLabel(relSched.totalMinutes) + '</div>';
         html += '</div>';
-        html += renderRelativeTimelineHTML(relSched, true, ev.id);
+        html += (state.settings && state.settings.showCheckboxes && !state.settings.checkHintSeen ? '<div class="check-hint">tap an emoji to check it off</div>' : '') + renderRelativeTimelineHTML(relSched, true, ev.id);
       } else if (sched.valid) {
         html += '<div class="startby">';
         html += '  <div class="eyebrow">start by</div>';
         html += '  <div class="time">' + minutesToClock(sched.startOverall) + '</div>';
         html += '</div>';
-        html += renderTimelineHTML(sched, ev.name, true, ev.id);
+        html += (state.settings && state.settings.showCheckboxes && !state.settings.checkHintSeen ? '<div class="check-hint">tap an emoji to check it off</div>' : '') + renderTimelineHTML(sched, ev.name, true, ev.id);
       } else if (ev.steps.length) {
         html += '<div class="empty-msg">' + ev.steps.length + ' step' + (ev.steps.length === 1 ? '' : 's') +
           ' loaded - set an event time above to see your schedule.</div>';
@@ -1842,6 +1900,9 @@ window.girlTimeAuth = (function() {
         html += '<div class="empty-msg">Set an event time above to start building this schedule.</div>';
       }
 
+      if (state.settings && state.settings.showCheckboxes && ev.steps.length) {
+        html += '<button class="clear-checks-btn" data-action="clear-checks" data-event="' + ev.id + '">clear checks</button>';
+      }
       html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '" style="margin-top:6px;">save this ' + (ev.isMiniMode ? 'mini routine' : 'routine') + '</button>';
 
       html += '</div>'; // .event-section
@@ -1859,6 +1920,8 @@ window.girlTimeAuth = (function() {
       html += renderRoutinesModal();
     } else if (state.modal === 'save') {
       html += renderSaveModal();
+    } else if (state.modal === 'settings') {
+      html += renderSettingsModal();
     } else if (state.modal === 'confirm-duplicate') {
       html += renderDuplicateModal();
     } else if (state.modal === 'example') {
@@ -2274,6 +2337,24 @@ window.girlTimeAuth = (function() {
           console.error('account deletion failed', err);
           showToast('Could not delete account - try again');
         });
+      }
+    } else if (action === 'open-settings') {
+      state.modal = 'settings';
+      render();
+    } else if (action === 'toggle-setting') {
+      state.settings = state.settings || {};
+      state.settings[id] = !state.settings[id];
+      debounceSaveSession();
+      render();
+    } else if (action === 'toggle-done') {
+      var sr = findStepRef(eventId, id, chunkId);
+      if (sr) { sr.done = !sr.done; state.settings = state.settings || {}; state.settings.checkHintSeen = true; debounceSaveSession(); render(); }
+    } else if (action === 'clear-checks') {
+      var evc = findEvent(eventId);
+      if (evc) {
+        evc.steps.forEach(function(x) { x.done = false; if (x.children) x.children.forEach(function(c) { c.done = false; }); });
+        debounceSaveSession();
+        render();
       }
     } else if (action === 'dup-replace') {
       var ps = state.pendingSave; state.pendingSave = null;

@@ -848,6 +848,11 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area
 .inline-check.on::after{content:"";width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
 .check-hint{font-size:13px;color:#B65D80;text-align:center;margin:0 0 6px}
 .modal-sheet{max-height:calc(100% - 20px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.cal-chips{display:flex;gap:8px;flex-wrap:wrap}
+.cal-chip{position:relative;display:inline-flex;align-items:center;gap:7px;width:auto;margin:0;padding:9px 16px;border-radius:999px;border:1.5px solid #F0D2DC;background:#fff;color:#B65D80;font-size:14px;font-weight:500;line-height:1.2;cursor:pointer}
+.cal-chip.on{background:#D77A9A;border-color:#D77A9A;color:#fff}
+.cal-chip-other input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;margin:0;padding:0;border:none;font-size:16px;cursor:pointer}
+.cal-chosen{font-size:13px;color:#7A6870;margin:10px 0 16px}
 </style>
 </head>
 <body>
@@ -1707,6 +1712,110 @@ window.girlTimeAuth = (function() {
     return html;
   }
 
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  function calDefaultDate(ev) {
+    var now = new Date();
+    var eventMin = timeStrToMinutes(ev.time);
+    var d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (eventMin !== null && now.getHours() * 60 + now.getMinutes() > eventMin) d.setDate(d.getDate() + 1);
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function dateAtMinutes(dateStr, mins) {
+    var p = (dateStr || '').split('-');
+    return new Date(+p[0], +p[1] - 1, +p[2], 0, mins, 0);
+  }
+
+  function calStamp(d) {
+    return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + pad2(d.getMinutes()) + '00';
+  }
+
+  function calendarDetails(sched) {
+    var lines = [];
+    sched.rows.forEach(function(r) {
+      if (r.kind === 'chunk') {
+        lines.push('\uD83C\uDF80 ' + r.name);
+        r.children.forEach(function(c) {
+          lines.push('   ' + c.emoji + ' ' + minutesToClock(c.start) + ' \u00B7 ' + c.label + ' (' + durLabel(c.hours, c.minutes) + ')');
+        });
+      } else {
+        lines.push(r.emoji + ' ' + minutesToClock(r.start) + ' \u00B7 ' + r.label + ' (' + durLabel(r.hours, r.minutes) + ')');
+      }
+    });
+    lines.push('');
+    lines.push('planned with girl time \u00B7 girl-time.app');
+    return lines.join('\n');
+  }
+
+  function calendarEventData() {
+    var ev = findEvent(state.modalEventId);
+    if (!ev) return null;
+    var sched = computeSchedule(ev.time, ev.steps);
+    if (!sched.valid) return null;
+    var el = document.getElementById('calDate');
+    var dateStr = (el && el.value) || calDefaultDate(ev);
+    return {
+      title: '[routine] ' + (ev.name || 'your event'),
+      start: dateAtMinutes(dateStr, sched.startOverall),
+      end: dateAtMinutes(dateStr, sched.eventMin),
+      details: (ev.name || 'your event') + ' starts at ' + minutesToClock(sched.eventMin) + '\n\n' + calendarDetails(sched)
+    };
+  }
+
+  function icsEscape(t) { return String(t).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n'); }
+
+  function downloadIcs(data) {
+    var now = new Date();
+    var stamp = now.getUTCFullYear() + pad2(now.getUTCMonth() + 1) + pad2(now.getUTCDate()) + 'T' + pad2(now.getUTCHours()) + pad2(now.getUTCMinutes()) + pad2(now.getUTCSeconds()) + 'Z';
+    var ics = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//girl time//EN', 'BEGIN:VEVENT',
+      'UID:' + now.getTime() + '@girl-time.app', 'DTSTAMP:' + stamp,
+      'DTSTART:' + calStamp(data.start), 'DTEND:' + calStamp(data.end),
+      'SUMMARY:' + icsEscape(data.title), 'DESCRIPTION:' + icsEscape(data.details),
+      'END:VEVENT', 'END:VCALENDAR'
+    ].join('\r\n');
+    var blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (data.title || 'girl time').replace(/[^a-z0-9 _-]/gi, '').trim() + '.ics';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  function ymd(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function calLabel(str) { return dateAtMinutes(str, 0).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toLowerCase(); }
+  window.gtSetCalDate = function(v) { if (v) { state.calDate = v; render(); } };
+
+  function renderCalendarModal() {
+    var ev = findEvent(state.modalEventId);
+    if (!ev) return '';
+    var sched = computeSchedule(ev.time, ev.steps);
+    if (!sched.valid) return '';
+    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    html += '<div class="modal-sheet">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">add to calendar</div>';
+    html += '<div class="warning-text" style="margin-top:0;">' + esc(ev.name || 'your event') + ' \u00B7 ' + minutesToClock(sched.startOverall) + ' \u2013 ' + minutesToClock(sched.eventMin) + '</div>';
+    var todayStr = ymd(new Date());
+    var tmw = new Date(); tmw.setDate(tmw.getDate() + 1);
+    var tomorrowStr = ymd(tmw);
+    var sel = state.calDate || calDefaultDate(ev);
+    var choice = sel === todayStr ? 'today' : (sel === tomorrowStr ? 'tomorrow' : 'other');
+    html += '<div class="field-label">date</div>';
+    html += '<div class="cal-chips">';
+    html += '<button class="cal-chip' + (choice === 'today' ? ' on' : '') + '" data-action="cal-pick" data-id="today">today</button>';
+    html += '<button class="cal-chip' + (choice === 'tomorrow' ? ' on' : '') + '" data-action="cal-pick" data-id="tomorrow">tomorrow</button>';
+    html += '<label class="cal-chip cal-chip-other' + (choice === 'other' ? ' on' : '') + '"><span class="emoji">&#128197;</span><span>other</span><input type="date" id="calDate" value="' + sel + '" onchange="window.gtSetCalDate && window.gtSetCalDate(this.value)" aria-label="pick a date"></label>';
+    html += '</div>';
+    html += '<div class="cal-chosen">' + calLabel(sel) + '</div>';
+    html += '<button class="primary-btn" data-action="cal-google">google calendar</button>';
+    html += '<button class="primary-btn ghost" data-action="cal-apple" style="margin-top:8px;">apple calendar</button>';
+    html += '</div></div>';
+    return html;
+  }
+
   function saveAsRoutine(eventId, name, isMini, mode) {
     if (!name.trim()) return;
     var ev = findEvent(eventId);
@@ -1905,6 +2014,9 @@ window.girlTimeAuth = (function() {
         html += '<button class="clear-checks-btn" data-action="clear-checks" data-event="' + ev.id + '">clear checks</button>';
       }
       html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '" style="margin-top:6px;">save this ' + (ev.isMiniMode ? 'mini routine' : 'routine') + '</button>';
+      if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
+        html += '<button class="primary-btn ghost" data-action="open-calendar" data-event="' + ev.id + '" style="margin-top:8px;">add to calendar</button>';
+      }
 
       html += '</div>'; // .event-section
     });
@@ -1921,6 +2033,8 @@ window.girlTimeAuth = (function() {
       html += renderRoutinesModal();
     } else if (state.modal === 'save') {
       html += renderSaveModal();
+    } else if (state.modal === 'calendar') {
+      html += renderCalendarModal();
     } else if (state.modal === 'settings') {
       html += renderSettingsModal();
     } else if (state.modal === 'confirm-duplicate') {
@@ -2338,6 +2452,46 @@ window.girlTimeAuth = (function() {
           console.error('account deletion failed', err);
           showToast('Could not delete account - try again');
         });
+      }
+    } else if (action === 'open-calendar') {
+      state.modal = 'calendar';
+      state.modalEventId = eventId;
+      state.calDate = null;
+      render();
+    } else if (action === 'cal-pick') {
+      var pd = new Date();
+      if (id === 'tomorrow') pd.setDate(pd.getDate() + 1);
+      state.calDate = ymd(pd);
+      render();
+    } else if (action === 'cal-google') {
+      var gd = calendarEventData();
+      if (gd) {
+        var tz = '';
+        try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+        var gurl = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+          '&text=' + encodeURIComponent(gd.title) +
+          '&dates=' + calStamp(gd.start) + '/' + calStamp(gd.end) +
+          '&details=' + encodeURIComponent(gd.details) +
+          (tz ? '&ctz=' + encodeURIComponent(tz) : '');
+        window.open(gurl, '_blank');
+      }
+    } else if (action === 'cal-apple') {
+      var ad = calendarEventData();
+      if (ad) {
+        var calPlugin = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
+          window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorCalendar;
+        if (calPlugin) {
+          calPlugin.createEventWithPrompt({
+            title: ad.title,
+            startDate: ad.start.getTime(),
+            endDate: ad.end.getTime(),
+            isAllDay: false,
+            description: ad.details,
+            notes: ad.details
+          }).catch(function(err) { console.error('calendar prompt failed', err); showToast('Could not open Calendar'); });
+        } else {
+          downloadIcs(ad);
+        }
       }
     } else if (action === 'open-settings') {
       state.modal = 'settings';

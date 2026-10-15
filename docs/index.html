@@ -878,6 +878,13 @@ body:has(.modal-backdrop.modal-top)::before{display:none}
 .rem-time{margin-left:auto;font-size:12px;color:var(--ink-faint)}
 .rem-note{font-size:12px;color:var(--ink-faint);margin:0 0 14px}
 .primary-btn.ghost.rem-set{background:#FDF0F4}
+.checks-row{display:flex;justify-content:center;align-items:center;gap:8px;margin:10px 0 4px}
+.checks-row .clear-checks-btn{margin:0}
+.checks-dot{color:var(--ink-faint);font-size:13px}
+.alert-before{gap:4px;cursor:text}
+.alert-before input{width:34px;height:auto;min-height:0;margin:0;padding:0;border:none;border-bottom:1.5px solid currentColor;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:center;-moz-appearance:textfield}
+.alert-before input::-webkit-inner-spin-button,.alert-before input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.alert-before input:focus{outline:none;box-shadow:none}
 </style>
 </head>
 <body>
@@ -1495,6 +1502,7 @@ window.girlTimeAuth = (function() {
       }
       state.loaded = true;
       render();
+      refreshAllReminders();
     });
   }
 
@@ -1511,6 +1519,7 @@ window.girlTimeAuth = (function() {
       if (v) { try { state.stepMemory = JSON.parse(v) || {}; } catch (e) {} }
       state.loaded = true;
       render();
+      refreshAllReminders();
     });
   }
 
@@ -1760,7 +1769,50 @@ window.girlTimeAuth = (function() {
     return alerts;
   }
 
+  function pushWidgetSchedule() {
+    if (!isNativeApp()) return;
+    var best = null;
+    var now = Date.now();
+    state.events.forEach(function(ev) {
+      if (!ev.reminder || ev.isMiniMode) return;
+      var sched = computeSchedule(ev.time, ev.steps);
+      if (!sched.valid || !sched.rows.length) return;
+      var d = ev.reminder.date;
+      var eventAt = dateAtMinutes(d, sched.eventMin).getTime();
+      if (eventAt <= now || (best && best.eventAt <= eventAt)) return;
+      var steps = [];
+      sched.rows.forEach(function(r) {
+        (r.kind === 'chunk' ? r.children : [r]).forEach(function(c) {
+          var st = dateAtMinutes(d, c.start).getTime(), en = dateAtMinutes(d, c.end).getTime();
+          if (en > st) steps.push({ label: c.label, emoji: c.emoji, start: st, end: en });
+        });
+      });
+      best = { event: ev.name || 'your event', startBy: dateAtMinutes(d, sched.startOverall).getTime(), eventAt: eventAt, steps: steps };
+    });
+    var payload = { json: best ? JSON.stringify(best) : '' };
+    callWidgetBridge('setSchedule', payload);
+    if (best && best.startBy - now <= 6 * 3600 * 1000) {
+      callWidgetBridge('updateLiveActivity', payload);
+    } else {
+      callWidgetBridge('endLiveActivity', {});
+    }
+    if (!window.__gtVisHook) {
+      window.__gtVisHook = true;
+      document.addEventListener('visibilitychange', function() { if (!document.hidden) pushWidgetSchedule(); });
+    }
+  }
+
+  function callWidgetBridge(method, payload) {
+    try {
+      var C = window.Capacitor;
+      var WB = (C.Plugins && C.Plugins.WidgetBridge) || (C.registerPlugin && C.registerPlugin('WidgetBridge'));
+      var pr = (WB && WB[method]) ? WB[method](payload) : (C.nativePromise ? C.nativePromise('WidgetBridge', method, payload) : null);
+      if (pr && pr.catch) pr.catch(function(e) { console.error('widget bridge ' + method + ' failed', e); });
+    } catch (e) { console.error('widget bridge ' + method + ' failed', e); }
+  }
+
   function refreshAllReminders() {
+    pushWidgetSchedule();
     var LN = notifPlugin();
     if (!LN) return Promise.resolve();
     return LN.getPending().then(function(res) {
@@ -1807,6 +1859,10 @@ window.girlTimeAuth = (function() {
     html += '<label class="cal-chip cal-chip-other' + (choice === 'other' ? ' on' : '') + '"><span class="emoji">&#128197;</span><span>other</span><input type="date" id="remDate" value="' + sel + '" onchange="window.gtSetRemDate && window.gtSetRemDate(this.value)" aria-label="pick a day"></label>';
     html += '</div>';
     html += '<div class="cal-chosen">' + calLabel(sel) + '</div>';
+    var allNotifySteps = [];
+    ev.steps.forEach(function(x) { (isChunk(x) ? x.children : [x]).forEach(function(c) { allNotifySteps.push(c); }); });
+    var allNotifyOn = allNotifySteps.length > 0 && allNotifySteps.every(function(x) { return x.notify; });
+    html += '<div class="settings-opt" style="margin:0 0 14px;"><div><div class="settings-opt-label">&#128276; alert me for every step</div><div class="settings-opt-sub">or choose steps one by one with &#9998;</div></div><button class="settings-switch' + (allNotifyOn ? ' on' : '') + '" data-action="toggle-all-step-notify" role="switch" aria-checked="' + (allNotifyOn ? 'true' : 'false') + '" aria-label="alert me for every step"></button></div>';
     html += '<div class="field-label">you\'ll get</div>';
     html += '<div class="rem-list">';
     alerts.forEach(function(a) {
@@ -1816,7 +1872,7 @@ window.girlTimeAuth = (function() {
     if (alerts.length && alerts[0].at.getTime() < Date.now()) {
       html += '<div class="rem-note" style="color:#B65D80;">some of these times have already passed for this day</div>';
     }
-    html += '<div class="rem-note">' + (off ? 'alerts come ' + off + ' min early' : 'alerts come right on time') + ' \u00B7 change in settings. turn on more step alerts with &#9998; on each step.</div>';
+    html += '<div class="rem-note">' + (off ? 'alerts come ' + off + ' min early' : 'alerts come right on time') + ' \u00B7 change in settings.</div>';
     if (ev.reminder) {
       html += '<button class="primary-btn" data-action="confirm-reminders">update reminders</button>';
       html += '<button class="primary-btn ghost" data-action="cancel-reminders" style="margin-top:8px;">cancel reminders</button>';
@@ -1843,6 +1899,21 @@ window.girlTimeAuth = (function() {
     return html;
   }
 
+  window.gtSetAlertBefore = function(v, el) {
+    var n = parseInt(v, 10);
+    if (!(n > 0)) return;
+    n = Math.min(n, 180);
+    state.settings = state.settings || {};
+    state.settings.alertOffset = n;
+    state.settings.lastAlertBefore = n;
+    debounceSaveSession();
+    var row = el && el.closest('.cal-chips');
+    if (row) {
+      row.querySelectorAll('.cal-chip').forEach(function(c) { c.classList.remove('on'); });
+      el.closest('.cal-chip').classList.add('on');
+    }
+  };
+
   function renderSettingsModal() {
     var st = state.settings || {};
     var html = '<div class="modal-backdrop modal-top" data-action="close-modal">';
@@ -1853,11 +1924,10 @@ window.girlTimeAuth = (function() {
     html += '<button class="settings-switch' + (st.showCheckboxes ? ' on' : '') + '" data-action="toggle-setting" data-id="showCheckboxes" role="switch" aria-checked="' + (st.showCheckboxes ? 'true' : 'false') + '" aria-label="show checkboxes"></button></div>';
     if (isNativeApp()) {
       var curOff = alertOffset();
-      var offs = [[0, 'at start'], [5, '5 min'], [10, '10'], [15, '15'], [30, '30']];
+      var beforeVal = curOff > 0 ? curOff : ((state.settings && state.settings.lastAlertBefore) || 5);
       html += '<div class="settings-opt" style="display:block;margin-top:10px;"><div class="settings-opt-label">alert timing</div><div class="settings-opt-sub">how early reminders arrive</div><div class="cal-chips" style="margin-top:10px;">';
-      offs.forEach(function(o) {
-        html += '<button class="cal-chip' + (curOff === o[0] ? ' on' : '') + '" data-action="set-alert-offset" data-id="' + o[0] + '">' + o[1] + '</button>';
-      });
+      html += '<button class="cal-chip' + (curOff === 0 ? ' on' : '') + '" data-action="set-alert-offset" data-id="0">at start</button>';
+      html += '<label class="cal-chip alert-before' + (curOff > 0 ? ' on' : '') + '"><input type="number" inputmode="numeric" min="1" max="180" value="' + beforeVal + '" aria-label="minutes before" onfocus="window.gtSetAlertBefore && window.gtSetAlertBefore(this.value, this)" oninput="window.gtSetAlertBefore && window.gtSetAlertBefore(this.value, this)"><span>min before</span></label>';
       html += '</div></div>';
     }
     html += '</div></div>';
@@ -2161,7 +2231,7 @@ window.girlTimeAuth = (function() {
       }
 
       if (state.settings && state.settings.showCheckboxes && ev.steps.length) {
-        html += '<button class="clear-checks-btn" data-action="clear-checks" data-event="' + ev.id + '">clear checks</button>';
+        html += '<div class="checks-row"><button class="clear-checks-btn" data-action="check-all" data-event="' + ev.id + '">check all</button><span class="checks-dot">&middot;</span><button class="clear-checks-btn" data-action="clear-checks" data-event="' + ev.id + '">uncheck all</button></div>';
       }
       html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '" style="margin-top:6px;">save this ' + (ev.isMiniMode ? 'mini routine' : 'routine') + '</button>';
       if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
@@ -2625,6 +2695,16 @@ window.girlTimeAuth = (function() {
       state.modalEventId = eventId;
       state.remDate = null;
       render();
+    } else if (action === 'toggle-all-step-notify') {
+      var evAll = findEvent(state.modalEventId);
+      if (evAll) {
+        var flatAll = [];
+        evAll.steps.forEach(function(x) { (isChunk(x) ? x.children : [x]).forEach(function(c) { flatAll.push(c); }); });
+        var turnOn = !flatAll.every(function(x) { return x.notify; });
+        flatAll.forEach(function(x) { x.notify = turnOn; });
+        debounceSaveSession();
+        render();
+      }
     } else if (action === 'rem-pick') {
       var rd = new Date();
       if (id === 'tomorrow') rd.setDate(rd.getDate() + 1);
@@ -2727,6 +2807,15 @@ window.girlTimeAuth = (function() {
         btn.setAttribute('aria-checked', sr.done ? 'true' : 'false');
         if (btn.classList.contains('inline-check')) btn.textContent = sr.done ? '' : (btn.getAttribute('data-em') || '');
         document.querySelectorAll('.check-hint').forEach(function(h) { h.remove(); });
+      }
+    } else if (action === 'check-all') {
+      var evk = findEvent(eventId);
+      if (evk) {
+        evk.steps.forEach(function(x) { x.done = true; if (x.children) x.children.forEach(function(c) { c.done = true; }); });
+        state.settings = state.settings || {};
+        state.settings.checkHintSeen = true;
+        debounceSaveSession();
+        render();
       }
     } else if (action === 'clear-checks') {
       var evc = findEvent(eventId);

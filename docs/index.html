@@ -885,6 +885,7 @@ body:has(.modal-backdrop.modal-top)::before{display:none}
 .alert-before input{width:34px;height:auto;min-height:0;margin:0;padding:0;border:none;border-bottom:1.5px solid currentColor;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:center;-moz-appearance:textfield}
 .alert-before input::-webkit-inner-spin-button,.alert-before input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .alert-before input:focus{outline:none;box-shadow:none}
+.settings-sub{margin:6px 0 0 18px}
 </style>
 </head>
 <body>
@@ -959,6 +960,7 @@ window.girlTimeAuth = (function() {
     onChange: function(fn) {
       listeners.push(fn);
       if (firebaseReady) fn(currentUser);
+      else setTimeout(function() { fn(null); }, 0); // offline / Firebase blocked: load local data instead of waiting forever
     },
     getUser: function() { return currentUser; },
     isReady: function() { return firebaseReady; },
@@ -1344,7 +1346,12 @@ window.girlTimeAuth = (function() {
     var showChecks = interactive && state.settings && state.settings.showCheckboxes;
     var stepRef = showChecks ? findStepRef(eventId, row.id, chunkId) : null;
     var isDone = !!(stepRef && stepRef.done);
-    if (showChecks && chunkId) {
+    var miniEach = !!(state.settings && state.settings.checkMiniSteps);
+    if (showChecks && chunkId && !miniEach) {
+      var parentRef = findStepRef(eventId, chunkId, null);
+      isDone = !!(parentRef && parentRef.done);
+    }
+    if (showChecks && chunkId && miniEach) {
       labelPrefix = '<button class="inline-check' + (isDone ? ' on' : '') + '" data-em="' + esc(row.emoji) + '" data-action="toggle-done" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + ' role="checkbox" aria-checked="' + (isDone ? 'true' : 'false') + '" aria-label="mark done">' + (isDone ? '' : esc(row.emoji)) + '</button> ';
     }
     var html = '<div class="step-row' + (chunkId ? ' chunk-child' : '') + (isDone ? ' step-done' : '') + '"' +
@@ -1370,7 +1377,13 @@ window.girlTimeAuth = (function() {
     var totalMin = row.children.reduce(function(sum, c) { return sum + (c.hours || 0) * 60 + (c.minutes || 0); }, 0);
     var startLabel = relative ? elapsedLabel(row.start) : minutesToClock(row.start);
     var endLabel = relative ? elapsedLabel(row.end) : minutesToClock(row.end);
-    var html = '<div class="step-row chunk-header" data-emoji="&#127872;" data-event="' + eventId + '" data-id="' + row.id + '">';
+    var chunkChecks = interactive && state.settings && state.settings.showCheckboxes && !state.settings.checkMiniSteps;
+    var chunkRef = chunkChecks ? findStepRef(eventId, row.id, null) : null;
+    var chunkDone = !!(chunkRef && chunkRef.done);
+    var html = '<div class="step-row chunk-header' + (chunkDone ? ' step-done' : '') + '" data-emoji="&#127872;" data-event="' + eventId + '" data-id="' + row.id + '">';
+    if (chunkChecks) {
+      html += '  <button class="emoji-check' + (chunkDone ? ' on' : '') + '" data-action="toggle-done" data-event="' + eventId + '" data-id="' + row.id + '" role="checkbox" aria-checked="' + (chunkDone ? 'true' : 'false') + '" aria-label="mark mini routine done"></button>';
+    }
     html += '  <div class="step-time">' + startLabel + '</div>';
     html += '  <div class="step-info"' + (interactive ? ' data-action="toggle-chunk" data-event="' + eventId + '" data-id="' + row.id + '" style="cursor:pointer;"' : '') + '>';
     html += '    <div class="step-label">' + esc(row.name) + ' <span class="chunk-badge chunk-pill">mini routine <span class="chunk-chevron' + (row.collapsed ? '' : ' open') + '"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 1 L8.5 5 L2.5 9 Z" fill="currentColor"/></svg></span></span></div>';
@@ -1922,6 +1935,10 @@ window.girlTimeAuth = (function() {
     html += '<div class="modal-title">settings</div>';
     html += '<div class="settings-opt"><div><div class="settings-opt-label">show checkboxes</div><div class="settings-opt-sub">tap each step&#39;s emoji to check it off</div></div>';
     html += '<button class="settings-switch' + (st.showCheckboxes ? ' on' : '') + '" data-action="toggle-setting" data-id="showCheckboxes" role="switch" aria-checked="' + (st.showCheckboxes ? 'true' : 'false') + '" aria-label="show checkboxes"></button></div>';
+    if (st.showCheckboxes) {
+      html += '<div class="settings-opt settings-sub"><div><div class="settings-opt-label">check mini routine steps one by one</div><div class="settings-opt-sub">when off, a whole mini routine checks off at once</div></div>';
+      html += '<button class="settings-switch' + (st.checkMiniSteps ? ' on' : '') + '" data-action="toggle-setting" data-id="checkMiniSteps" role="switch" aria-checked="' + (st.checkMiniSteps ? 'true' : 'false') + '" aria-label="check mini routine steps one by one"></button></div>';
+    }
     if (isNativeApp()) {
       var curOff = alertOffset();
       var beforeVal = curOff > 0 ? curOff : ((state.settings && state.settings.lastAlertBefore) || 5);
@@ -2801,6 +2818,7 @@ window.girlTimeAuth = (function() {
         state.settings = state.settings || {};
         state.settings.checkHintSeen = true;
         debounceSaveSession();
+        if (sr.children) render();
         var rowEl = btn.closest('.step-row');
         if (rowEl) rowEl.classList.toggle('step-done', sr.done);
         btn.classList.toggle('on', sr.done);

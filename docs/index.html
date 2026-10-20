@@ -892,6 +892,32 @@ body:has(.modal-backdrop.modal-top)::before{display:none}
 .note-box{background:#FDF0F4;border:1px solid #F3D3DE;border-radius:14px;padding:12px 14px;margin:0 0 14px;color:#5E2A45;font-size:14px;line-height:1.45}
 .note-box-title{font-size:12px;font-weight:700;color:#B65D80;letter-spacing:.03em;margin-bottom:2px}
 .note-box-text{white-space:pre-line}
+.sched-seg{display:flex;background:#F3E9E7;border-radius:12px;padding:3px}
+.sched-seg button{flex:1;border:none;background:transparent;font:inherit;font-size:14px;font-weight:600;color:#8C7580;padding:8px 0;border-radius:9px;cursor:pointer}
+.sched-seg button.on{background:#fff;color:#B65D80}
+.sched-days{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+.sched-day{width:38px;height:38px;border-radius:50%;border:1.5px solid #F0D2DC;background:#fff;color:#B65D80;font:inherit;font-size:13px;font-weight:700;cursor:pointer;padding:0}
+.sched-day.on{background:#D77A9A;border-color:#D77A9A;color:#fff}
+.sched-quick{display:flex;gap:14px;margin-top:10px}
+.sched-link{background:none;border:none;padding:0;font:inherit;font-size:13px;color:#B65D80;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.sched-timeline{font-size:13px;color:#7A6870;margin-top:10px}
+.sched-time-row{display:grid;grid-template-columns:48px 1fr;gap:8px;align-items:center;margin-top:8px;font-size:13px;color:#5E2A45}
+.sched-time-row input{height:40px}
+.today-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1.5px solid #F0C2D2;border-radius:16px;padding:12px 14px;margin:0 0 14px}
+.today-banner.loaded{border-style:dashed;background:transparent}
+.tb-eyebrow{font-size:12px;font-weight:700;color:#B65D80}
+.tb-name{font-size:15px;font-weight:600;color:#5E2A45;margin-top:2px}
+.tb-btns{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.tb-load{border:none;background:#D77A9A;color:#fff;font:inherit;font-size:13px;font-weight:600;padding:8px 14px;border-radius:999px;cursor:pointer}
+.tb-skip{border:none;background:none;color:#9A8A90;font:inherit;font-size:13px;padding:8px 4px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.routine-when{font-size:12px;font-weight:700;color:#B65D80;margin-bottom:2px}
+.sched-tag{display:inline-block;margin-top:6px;border:none;background:#FDF0F4;color:#B65D80;font:inherit;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;cursor:pointer}
+.howto-kinds{background:#fff;border-radius:16px;padding:14px 16px;margin:4px 0 16px}
+.howto-kinds-title{font-size:13px;font-weight:700;color:#B65D80;margin-bottom:8px}
+.howto-kind{font-size:14px;line-height:1.45;color:#5E2A45;padding:6px 0;border-top:1px dashed #F0DDE3}
+.howto-kind:first-of-type{border-top:none}
+.howto-kind-name{display:block;font-weight:700}
+.routines-tab{white-space:nowrap;padding-left:6px;padding-right:6px}
 </style>
 </head>
 <body>
@@ -1493,6 +1519,9 @@ window.girlTimeAuth = (function() {
           isMiniMode: !!ev.isMiniMode,
           note: ev.note || '',
           reminder: ev.reminder || undefined,
+          routineId: ev.routineId || undefined,
+          occurrence: ev.occurrence || undefined,
+          autoLoaded: !!ev.autoLoaded,
           steps: (ev.steps || []).map(function(s) {
             if (s.kind === 'chunk') {
               return {
@@ -1539,8 +1568,10 @@ window.girlTimeAuth = (function() {
         catch (e) { console.error('parse step memory failed', e); }
       }
       state.loaded = true;
+      checkAutoLoad();
       render();
       refreshAllReminders();
+      startAutoLoadWatch();
     });
   }
 
@@ -1556,8 +1587,10 @@ window.girlTimeAuth = (function() {
     }).then(function(v) {
       if (v) { try { state.stepMemory = JSON.parse(v) || {}; } catch (e) {} }
       state.loaded = true;
+      checkAutoLoad();
       render();
       refreshAllReminders();
+      startAutoLoadWatch();
     });
   }
 
@@ -1794,7 +1827,7 @@ window.girlTimeAuth = (function() {
       at: dateAtMinutes(dateStr, sched.startOverall - off)
     }];
     flat.forEach(function(r) {
-      var ref = findStepRef(ev.id, r.id, r.chunkId);
+      var ref = stepRefIn(ev, r.id, r.chunkId);
       if (ref && ref.notify) {
         alerts.push({
           emoji: r.emoji, label: r.label, min: r.start - off,
@@ -1811,13 +1844,10 @@ window.girlTimeAuth = (function() {
     if (!isNativeApp()) return;
     var best = null;
     var now = Date.now();
-    state.events.forEach(function(ev) {
-      if (!ev.reminder || ev.isMiniMode) return;
-      var sched = computeSchedule(ev.time, ev.steps);
-      if (!sched.valid || !sched.rows.length) return;
-      var d = ev.reminder.date;
-      var eventAt = dateAtMinutes(d, sched.eventMin).getTime();
-      if (eventAt <= now || (best && best.eventAt <= eventAt)) return;
+    upcomingOccurrences(3).forEach(function(o) {
+      var sched = o.sched;
+      if (!sched.rows.length || o.eventAt <= now || (best && best.eventAt <= o.eventAt)) return;
+      var d = o.date;
       var steps = [];
       sched.rows.forEach(function(r) {
         (r.kind === 'chunk' ? r.children : [r]).forEach(function(c) {
@@ -1825,7 +1855,7 @@ window.girlTimeAuth = (function() {
           if (en > st) steps.push({ label: c.label, emoji: c.emoji, start: st, end: en });
         });
       });
-      best = { event: ev.name || 'your event', startBy: dateAtMinutes(d, sched.startOverall).getTime(), eventAt: eventAt, steps: steps };
+      best = { event: o.ev.name || 'your event', startBy: o.startAt, eventAt: o.eventAt, steps: steps };
     });
     var payload = { json: best ? JSON.stringify(best) : '' };
     callWidgetBridge('setSchedule', payload);
@@ -1858,15 +1888,14 @@ window.girlTimeAuth = (function() {
       if (pend.length) return LN.cancel({ notifications: pend.map(function(n) { return { id: n.id }; }) });
     }).catch(function() {}).then(function() {
       var list = [];
-      var nextId = 1;
-      state.events.forEach(function(ev) {
-        if (!ev.reminder || ev.isMiniMode) return;
-        reminderAlerts(ev, ev.reminder.date).forEach(function(a) {
-          if (a.at.getTime() > Date.now() + 5000) {
-            list.push({ id: nextId++, title: a.title, body: a.body, schedule: { at: a.at, allowWhileIdle: true } });
-          }
+      upcomingOccurrences(7).forEach(function(o) {
+        reminderAlerts(o.ev, o.date).forEach(function(a) {
+          if (a.at.getTime() > Date.now() + 5000) list.push({ title: a.title, body: a.body, schedule: { at: a.at, allowWhileIdle: true } });
         });
       });
+      list.sort(function(a, b) { return a.schedule.at - b.schedule.at; });
+      list = list.slice(0, 60);
+      list.forEach(function(n, i) { n.id = i + 1; });
       if (list.length) return LN.schedule({ notifications: list });
     }).catch(function(e) { console.error('reminder scheduling failed', e); });
   }
@@ -1919,6 +1948,303 @@ window.girlTimeAuth = (function() {
     }
     html += '</div></div>';
     return html;
+  }
+
+  // ---------- scheduling (one day or repeating) ----------
+  var DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+  var DAY_LETTERS = { 1: 'M', 2: 'T', 3: 'W', 4: 'T', 5: 'F', 6: 'S', 0: 'S' };
+  var DAY_SHORT = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' };
+
+  function stepRefIn(ev, id, chunkId) {
+    var list = ev.steps || [];
+    if (chunkId) { var ch = list.find(function(x) { return x.id === chunkId; }); list = ch ? ch.children : []; }
+    return list.find(function(x) { return x.id === id; }) || null;
+  }
+  function dateFromYmd(str) { var p = String(str).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function addDays(str, n) { var d = dateFromYmd(str); d.setDate(d.getDate() + n); return ymd(d); }
+
+  function scheduleTimeFor(r, dateStr) {
+    var sc = r.schedule;
+    if (sc && sc.type === 'repeat' && sc.times && dateStr) {
+      var t = sc.times[dateFromYmd(dateStr).getDay()];
+      if (t) return t;
+    }
+    return r.time || '';
+  }
+  function routineOccursOn(r, dateStr) {
+    var sc = r.schedule;
+    if (!sc || r.isMini) return false;
+    if ((r.skipDates || []).indexOf(dateStr) !== -1) return false;
+    if (sc.type === 'once') return sc.date === dateStr;
+    if (sc.type === 'repeat') return (sc.days || []).indexOf(dateFromYmd(dateStr).getDay()) !== -1;
+    return false;
+  }
+  function nextOccurrence(r) {
+    var today = ymd(new Date());
+    for (var i = 0; i < 60; i++) { var d = addDays(today, i); if (routineOccursOn(r, d)) return d; }
+    return null;
+  }
+  function whenLabel(dateStr) {
+    var today = ymd(new Date());
+    if (dateStr === today) return 'today';
+    if (dateStr === addDays(today, 1)) return 'tomorrow &middot; ' + calLabel(dateStr);
+    return calLabel(dateStr);
+  }
+  function routineAsEvent(r, dateStr) {
+    return {
+      id: 'r-' + r.id,
+      name: r.eventName || r.name,
+      time: scheduleTimeFor(r, dateStr),
+      note: r.note || '',
+      steps: (r.steps || []).map(function(st, i) { return { id: 'r' + i, label: st.label, hours: st.hours, minutes: st.minutes, notify: !!st.notify }; })
+    };
+  }
+  function upcomingOccurrences(days) {
+    var out = [];
+    var today = ymd(new Date());
+    state.routines.forEach(function(r) {
+      if (!r.schedule || r.isMini) return;
+      for (var i = 0; i < days; i++) {
+        var d = addDays(today, i);
+        if (!routineOccursOn(r, d)) continue;
+        var live = state.events.find(function(e) { return e.routineId === r.id && e.occurrence === d; });
+        out.push({ ev: live || routineAsEvent(r, d), date: d, routine: r });
+      }
+    });
+    state.events.forEach(function(ev) {
+      if (ev.reminder && !ev.isMiniMode && ev.reminder.date >= today) out.push({ ev: ev, date: ev.reminder.date, routine: null });
+    });
+    out.forEach(function(o) {
+      var sc = computeSchedule(o.ev.time, o.ev.steps);
+      o.sched = sc;
+      o.eventAt = sc.valid ? dateAtMinutes(o.date, sc.eventMin).getTime() : 0;
+      o.startAt = sc.valid ? dateAtMinutes(o.date, sc.startOverall).getTime() : 0;
+    });
+    return out.filter(function(o) { return o.sched.valid; }).sort(function(a, b) { return a.startAt - b.startAt; });
+  }
+  function scheduleLabel(r) {
+    var sc = r && r.schedule;
+    if (!sc) return '';
+    if (sc.type === 'once') return '📅 ' + calLabel(sc.date);
+    var key = DAY_ORDER.filter(function(d) { return (sc.days || []).indexOf(d) !== -1; });
+    if (key.length === 7) return '🔁 every day';
+    if (key.join() === '1,2,3,4,5') return '🔁 weekdays';
+    if (key.join() === '6,0') return '🔁 weekends';
+    return '🔁 ' + key.map(function(d) { return DAY_SHORT[d]; }).join(', ');
+  }
+  function flattenEventSteps(ev) {
+    var flat = [];
+    (ev.steps || []).forEach(function(st) {
+      (isChunk(st) ? st.children : [st]).forEach(function(c) { flat.push({ label: c.label, hours: c.hours, minutes: c.minutes, notify: !!c.notify }); });
+    });
+    return flat;
+  }
+  function upsertRoutineFromEvent(ev) {
+    var nm = (ev.name || '').trim() || 'my routine';
+    var r = ev.routineId ? state.routines.find(function(x) { return x.id === ev.routineId && !x.isMini; }) : null;
+    if (!r) r = state.routines.find(function(x) { return !x.isMini && normRoutineName(x.name) === normRoutineName(nm); });
+    if (!r) { r = { id: uid(), name: nm, isMini: false }; state.routines.unshift(r); }
+    r.eventName = ev.name || '';
+    r.time = ev.time || '';
+    r.note = eventNoteText(ev);
+    r.steps = flattenEventSteps(ev);
+    return r;
+  }
+  function eventStillAhead(ev) {
+    var sc = computeSchedule(ev.time, ev.steps);
+    return !!(sc.valid && ev.occurrence && dateAtMinutes(ev.occurrence, sc.eventMin).getTime() > Date.now());
+  }
+  function loadOccurrence(ev, r, dateStr, auto) {
+    snapshotState();
+    var pe = routineAsEvent(r, dateStr);
+    ev.name = pe.name || '';
+    ev.time = pe.time;
+    ev.note = pe.note;
+    ev.steps = pe.steps.map(function(st) { return { id: uid(), label: st.label, hours: st.hours, minutes: st.minutes, notify: st.notify }; });
+    ev.isMiniMode = false;
+    ev.routineId = r.id;
+    ev.occurrence = dateStr;
+    ev.autoLoaded = !!auto;
+    delete ev.reminder;
+    debounceSaveSession();
+  }
+  // Loads today's scheduled routine when nothing else is in progress; otherwise offers it in a banner.
+  function checkAutoLoad() {
+    var ev = state.events[0];
+    if (!ev || !state.routines) return false;
+    var today = ymd(new Date());
+    var now = Date.now();
+    var expired = false;
+    state.routines.forEach(function(r) {
+      if (r.schedule && r.schedule.type === 'once' && r.schedule.date < today) { delete r.schedule; delete r.skipDates; expired = true; }
+    });
+    if (expired) saveRoutines();
+    var cands = state.routines.filter(function(r) { return routineOccursOn(r, today); }).map(function(r) {
+      var pe = routineAsEvent(r, today);
+      var sc = computeSchedule(pe.time, pe.steps);
+      return { r: r, eventAt: sc.valid ? dateAtMinutes(today, sc.eventMin).getTime() : 0, startAt: sc.valid ? dateAtMinutes(today, sc.startOverall).getTime() : 0 };
+    }).filter(function(c) { return c.eventAt > now; }).sort(function(a, b) { return a.startAt - b.startAt; });
+    var prev = JSON.stringify(state.todayBanner || null);
+    state.todayBanner = null;
+    if (cands.length) {
+      var c = cands[0];
+      if (ev.routineId === c.r.id && ev.occurrence === today) {
+        state.todayBanner = { routineId: c.r.id, loaded: true };
+      } else {
+        var hasWork = (ev.steps && ev.steps.length) || (ev.name && ev.name.trim());
+        var replaceable = !hasWork || (ev.routineId === c.r.id && ev.occurrence !== today) ||
+          (ev.autoLoaded && (ev.occurrence !== today || !eventStillAhead(ev)));
+        if (replaceable) {
+          loadOccurrence(ev, c.r, today, true);
+          state.todayBanner = { routineId: c.r.id, loaded: true };
+          return true;
+        }
+        state.todayBanner = { routineId: c.r.id, loaded: false };
+      }
+    }
+    return expired || prev !== JSON.stringify(state.todayBanner);
+  }
+  function startAutoLoadWatch() {
+    if (window.__gtAutoWatch) return;
+    window.__gtAutoWatch = true;
+    function tick() {
+      var a = document.activeElement;
+      if (!state.loaded || state.modal || (a && /INPUT|TEXTAREA/.test(a.tagName))) return;
+      if (checkAutoLoad()) { render(); refreshAllReminders(); }
+    }
+    document.addEventListener('visibilitychange', function() { if (!document.hidden) tick(); });
+    setInterval(tick, 60000);
+  }
+
+  function schedTargetRoutine() {
+    var t = state.schedTarget || {};
+    if (t.routineId) return state.routines.find(function(x) { return x.id === t.routineId; }) || null;
+    var ev = findEvent(t.eventId);
+    return ev && ev.routineId ? (state.routines.find(function(x) { return x.id === ev.routineId && !x.isMini; }) || null) : null;
+  }
+  function schedPreviewDate() {
+    var dr = state.sched;
+    if (dr.mode === 'one') return dr.date;
+    var today = ymd(new Date());
+    for (var i = 0; i < 8; i++) { var d = addDays(today, i); if (dr.days.indexOf(dateFromYmd(d).getDay()) !== -1) return d; }
+    return today;
+  }
+  function schedDraftEv() {
+    var t = state.schedTarget || {};
+    if (t.routineId) {
+      var r = state.routines.find(function(x) { return x.id === t.routineId; });
+      if (!r) return null;
+      var pe = routineAsEvent(r, null);
+      var dn = dateFromYmd(schedPreviewDate()).getDay();
+      if (state.sched.mode === 'rep' && state.sched.times[dn]) pe.time = state.sched.times[dn];
+      return pe;
+    }
+    return findEvent(t.eventId);
+  }
+  window.gtSetSchedDate = function(v) { if (v && state.sched) { state.sched.date = v; render(); } };
+  window.gtSetSchedTime = function(day, v) { if (state.sched) state.sched.times[day] = v; };
+
+  function renderScheduleModal() {
+    var ev = schedDraftEv();
+    var dr = state.sched;
+    if (!ev || !dr) return '';
+    var sched = computeSchedule(ev.time, ev.steps);
+    var native = isNativeApp();
+    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    html += '<div class="modal-sheet">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">' + (native ? 'schedule &amp; reminders' : 'schedule') + '</div>';
+    html += '<div class="warning-text" style="margin-top:0;">' + esc(ev.name || 'your event') + (sched.valid ? ' &middot; start by ' + minutesToClock(sched.startOverall) : '') + '</div>';
+    html += '<div class="field-label">when</div>';
+    html += '<div class="sched-seg"><button class="' + (dr.mode === 'one' ? 'on' : '') + '" data-action="sched-mode" data-id="one">one day</button><button class="' + (dr.mode === 'rep' ? 'on' : '') + '" data-action="sched-mode" data-id="rep">repeat</button></div>';
+    if (dr.mode === 'one') {
+      var todayStr = ymd(new Date());
+      var choice = dr.date === todayStr ? 'today' : (dr.date === addDays(todayStr, 1) ? 'tomorrow' : 'other');
+      html += '<div class="cal-chips" style="margin-top:12px;">';
+      html += '<button class="cal-chip' + (choice === 'today' ? ' on' : '') + '" data-action="sched-pick" data-id="today">today</button>';
+      html += '<button class="cal-chip' + (choice === 'tomorrow' ? ' on' : '') + '" data-action="sched-pick" data-id="tomorrow">tomorrow</button>';
+      html += '<label class="cal-chip cal-chip-other' + (choice === 'other' ? ' on' : '') + '"><span class="emoji">&#128197;</span><span>other</span><input type="date" value="' + dr.date + '" onchange="window.gtSetSchedDate && window.gtSetSchedDate(this.value)" aria-label="pick a day"></label>';
+      html += '</div>';
+      html += '<div class="cal-chosen">' + calLabel(dr.date) + '</div>';
+    } else {
+      html += '<div class="sched-days">';
+      DAY_ORDER.forEach(function(d) {
+        var on = dr.days.indexOf(d) !== -1;
+        html += '<button class="sched-day' + (on ? ' on' : '') + '" data-action="sched-day" data-id="' + d + '" aria-pressed="' + (on ? 'true' : 'false') + '" aria-label="' + DAY_SHORT[d] + '">' + DAY_LETTERS[d] + '</button>';
+      });
+      html += '</div>';
+      html += '<div class="sched-quick"><button class="sched-link" data-action="sched-days" data-id="weekdays">weekdays</button><button class="sched-link" data-action="sched-days" data-id="every">every day</button></div>';
+      var tR = schedTargetRoutine();
+      var baseTime = (state.schedTarget || {}).routineId ? ((tR && tR.time) || '') : (ev.time || '');
+      html += '<div class="sched-timeline">' + (baseTime ? 'at ' + esc(baseTime) + ' each day' : 'same time each day') + ' &middot; <button class="sched-link" data-action="sched-times">' + (dr.showTimes ? 'use the same time' : 'different times on some days') + '</button></div>';
+      if (dr.showTimes) {
+        DAY_ORDER.forEach(function(d) {
+          if (dr.days.indexOf(d) === -1) return;
+          html += '<div class="sched-time-row"><span>' + DAY_SHORT[d] + '</span><input type="text" autocomplete="off" value="' + esc(dr.times[d] || baseTime) + '" aria-label="' + DAY_SHORT[d] + ' time" oninput="window.gtSetSchedTime && window.gtSetSchedTime(' + d + ', this.value)"></div>';
+        });
+      }
+    }
+    if (native && sched.valid) {
+      html += '<div class="field-label" style="margin-top:16px;">reminders</div>';
+      var allSteps = [];
+      ev.steps.forEach(function(x) { (isChunk(x) ? x.children : [x]).forEach(function(c) { allSteps.push(c); }); });
+      var allOn = allSteps.length > 0 && allSteps.every(function(x) { return x.notify; });
+      html += '<div class="settings-opt" style="margin:0 0 10px;"><div><div class="settings-opt-label">&#128276; alert me for every step</div><div class="settings-opt-sub">or choose steps one by one with &#9998;</div></div><button class="settings-switch' + (allOn ? ' on' : '') + '" data-action="toggle-all-step-notify" role="switch" aria-checked="' + (allOn ? 'true' : 'false') + '" aria-label="alert me for every step"></button></div>';
+      html += '<div class="rem-list">';
+      reminderAlerts(ev, schedPreviewDate()).forEach(function(a) {
+        html += '<div class="rem-row"><span class="emoji">' + a.emoji + '</span>' + esc(a.label) + '<span class="rem-time">' + minutesToClock(a.min) + '</span></div>';
+      });
+      html += '</div>';
+      var off = alertOffset();
+      html += '<div class="rem-note">' + (off ? 'alerts come ' + off + ' min early' : 'alerts come right on time') + ' &middot; change in settings.</div>';
+    }
+    var r0 = schedTargetRoutine();
+    html += '<button class="primary-btn" data-action="sched-confirm" style="margin-top:14px;">' + (r0 && r0.schedule ? 'update schedule' : 'schedule it') + '</button>';
+    if (r0 && r0.schedule) html += '<button class="primary-btn ghost" data-action="sched-remove" style="margin-top:8px;">remove schedule</button>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function confirmSchedule() {
+    var t = state.schedTarget || {};
+    var dr = state.sched;
+    if (dr.mode === 'rep' && !dr.days.length) { showToast('Pick at least one day'); return; }
+    var r = null, evT = null;
+    if (t.routineId) r = state.routines.find(function(x) { return x.id === t.routineId; });
+    else { evT = findEvent(t.eventId); if (evT) r = upsertRoutineFromEvent(evT); }
+    if (!r) return;
+    if (dr.mode === 'rep') {
+      var times = {};
+      Object.keys(dr.times || {}).forEach(function(k) {
+        var v = String(dr.times[k] || '').trim();
+        if (dr.days.indexOf(+k) !== -1 && v && timeStrToMinutes(v) !== null && v !== r.time) times[k] = v;
+      });
+      r.schedule = { type: 'repeat', days: dr.days.slice(), times: times };
+    } else {
+      r.schedule = { type: 'once', date: dr.date };
+    }
+    r.skipDates = [];
+    function finish() {
+      saveRoutines();
+      var today = ymd(new Date());
+      if (evT) {
+        evT.routineId = r.id;
+        delete evT.reminder;
+        if (routineOccursOn(r, today)) { evT.occurrence = today; evT.autoLoaded = true; }
+        debounceSaveSession();
+      }
+      state.modal = null;
+      checkAutoLoad();
+      render();
+      refreshAllReminders();
+      showToast('Scheduled "' + r.name + '" ' + scheduleLabel(r));
+    }
+    var LN = notifPlugin();
+    if (!LN) { finish(); return; }
+    LN.checkPermissions().then(function(pm) {
+      if (pm && pm.display === 'granted') return pm;
+      return LN.requestPermissions();
+    }).then(function() { finish(); }).catch(function() { finish(); });
   }
 
   function renderMenuModal() {
@@ -2094,9 +2420,9 @@ window.girlTimeAuth = (function() {
     var flatSteps = [];
     ev.steps.forEach(function(s) {
       if (isChunk(s)) {
-        s.children.forEach(function(c) { flatSteps.push({ label: c.label, hours: c.hours, minutes: c.minutes }); });
+        s.children.forEach(function(c) { flatSteps.push({ label: c.label, hours: c.hours, minutes: c.minutes, notify: !!c.notify }); });
       } else {
-        flatSteps.push({ label: s.label, hours: s.hours, minutes: s.minutes });
+        flatSteps.push({ label: s.label, hours: s.hours, minutes: s.minutes, notify: !!s.notify });
       }
     });
     var routine = {
@@ -2114,8 +2440,9 @@ window.girlTimeAuth = (function() {
         if (!!state.routines[k].isMini === !!isMini && normRoutineName(state.routines[k].name) === normRoutineName(name)) { replaceIdx = k; break; }
       }
     }
-    if (replaceIdx !== -1) { routine.id = state.routines[replaceIdx].id; state.routines[replaceIdx] = routine; }
+    if (replaceIdx !== -1) { routine.id = state.routines[replaceIdx].id; routine.schedule = state.routines[replaceIdx].schedule; routine.skipDates = state.routines[replaceIdx].skipDates; state.routines[replaceIdx] = routine; }
     else { state.routines.unshift(routine); }
+    if (!isMini) { ev.routineId = routine.id; debounceSaveSession(); }
     saveRoutines().then(function() {
       showToast('Saved "' + routine.name + '"' + (isMini ? ' as a mini routine' : ''));
     }).catch(function() { showToast('Could not save'); });
@@ -2130,8 +2457,13 @@ window.girlTimeAuth = (function() {
     snapshotState();
     ev.name = (r.eventName !== undefined) ? r.eventName : (r.name || ev.name);
     ev.time = (r.time !== undefined) ? r.time : ev.time;
-    ev.steps = r.steps.map(function(s) { return { id: uid(), label: s.label, hours: s.hours, minutes: s.minutes }; });
+    ev.steps = r.steps.map(function(s) { return { id: uid(), label: s.label, hours: s.hours, minutes: s.minutes, notify: !!s.notify }; });
     ev.note = r.note || '';
+    var todayL = ymd(new Date());
+    ev.routineId = r.isMini ? undefined : r.id;
+    ev.occurrence = (!r.isMini && routineOccursOn(r, todayL)) ? todayL : undefined;
+    ev.autoLoaded = !!ev.occurrence;
+    delete ev.reminder;
     state.modal = null;
     debounceSaveSession();
     showToast('Loaded "' + r.name + '" - ' + ev.steps.length + ' step' + (ev.steps.length === 1 ? '' : 's'));
@@ -2211,6 +2543,14 @@ window.girlTimeAuth = (function() {
         }
       }
 
+      if (idx === 0 && state.todayBanner) {
+        var tbR = state.routines.find(function(x) { return x.id === state.todayBanner.routineId; });
+        if (tbR) {
+          html += '<div class="today-banner' + (state.todayBanner.loaded ? ' loaded' : '') + '"><div class="tb-text"><div class="tb-eyebrow">' + (tbR.schedule && tbR.schedule.type === 'once' ? '📅 scheduled for today' : '🔁 today&#39;s routine') + '</div><div class="tb-name">' + esc(tbR.name) + ' &middot; ' + esc(scheduleTimeFor(tbR, ymd(new Date()))) + '</div></div><div class="tb-btns">';
+          if (!state.todayBanner.loaded) html += '<button class="tb-load" data-action="load-today" data-id="' + tbR.id + '">load it</button>';
+          html += '<button class="tb-skip" data-action="skip-today" data-id="' + tbR.id + '">skip today</button></div></div>';
+        }
+      }
       html += '<div class="event-card-header">';
       html += '  <button class="routines-link" data-action="open-routines" data-event="' + ev.id + '" style="padding-left:0;white-space:normal;">my saved routines</button>';
       html += '  <div class="utility-row">';
@@ -2290,12 +2630,13 @@ window.girlTimeAuth = (function() {
       if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
         html += '<button class="primary-btn ghost" data-action="open-calendar" data-event="' + ev.id + '" style="margin-top:8px;">add to calendar</button>';
       }
-      if (isNativeApp() && !ev.isMiniMode && sched && sched.valid && ev.steps.length) {
-        var remLabel = 'set reminders';
-        if (ev.reminder) {
-          remLabel = '&#128276; reminders set &middot; ' + calLabel(ev.reminder.date).split(',')[0] + ' ' + minutesToClock(sched.startOverall - alertOffset());
-        }
-        html += '<button class="primary-btn ghost' + (ev.reminder ? ' rem-set' : '') + '" data-action="open-reminders" data-event="' + ev.id + '" style="margin-top:8px;">' + remLabel + '</button>';
+      if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
+        var linkedR = ev.routineId ? state.routines.find(function(x) { return x.id === ev.routineId && !x.isMini; }) : null;
+        var schedLbl = isNativeApp() ? 'schedule &amp; reminders' : 'schedule';
+        var isSet = !!(linkedR && linkedR.schedule) || !!ev.reminder;
+        if (linkedR && linkedR.schedule) schedLbl = esc(scheduleLabel(linkedR)) + ' &middot; edit';
+        else if (ev.reminder) schedLbl = '&#128276; reminders set &middot; ' + calLabel(ev.reminder.date).split(',')[0];
+        html += '<button class="primary-btn ghost' + (isSet ? ' rem-set' : '') + '" data-action="open-schedule" data-event="' + ev.id + '" style="margin-top:8px;">' + schedLbl + '</button>';
       }
 
       html += '</div>'; // .event-section
@@ -2313,6 +2654,8 @@ window.girlTimeAuth = (function() {
       html += renderRoutinesModal();
     } else if (state.modal === 'save') {
       html += renderSaveModal();
+    } else if (state.modal === 'schedule') {
+      html += renderScheduleModal();
     } else if (state.modal === 'reminders') {
       html += renderRemindersModal();
     } else if (state.modal === 'menu') {
@@ -2352,21 +2695,30 @@ window.girlTimeAuth = (function() {
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
 
     var list, emptyMsg;
+    var nextMap = {};
     if (mode === 'insert') {
       html += '<div class="modal-title">add a saved ' + (ev && ev.isMiniMode ? 'routine' : 'mini routine') + '</div>';
       list = state.routines.filter(function(r) { return r.isMini; });
       emptyMsg = 'No mini routines saved yet. Save one with "save as mini routine" to reuse it as a group here.';
     } else {
       html += '<div class="modal-title">my saved routines</div>';
-      var tab = state.routinesTab || 'routines';
+      var nSched = state.routines.filter(function(r) { return r.schedule && !r.isMini; }).length;
+      var tab = state.routinesTab || (nSched ? 'upcoming' : 'routines');
       var nMini = state.routines.filter(function(r) { return r.isMini; }).length;
       var nRoutines = state.routines.length - nMini;
       html += '<div class="routines-tabs">';
+      html += '  <button class="routines-tab' + (tab === 'upcoming' ? ' active' : '') + '" data-action="switch-routines-tab" data-id="upcoming">upcoming <span class="tab-count">' + nSched + '</span></button>';
       html += '  <button class="routines-tab' + (tab === 'routines' ? ' active' : '') + '" data-action="switch-routines-tab" data-id="routines">routines <span class="tab-count">' + nRoutines + '</span></button>';
-      html += '  <button class="routines-tab' + (tab === 'mini' ? ' active' : '') + '" data-action="switch-routines-tab" data-id="mini">mini routines <span class="tab-count">' + nMini + '</span></button>';
+      html += '  <button class="routines-tab' + (tab === 'mini' ? ' active' : '') + '" data-action="switch-routines-tab" data-id="mini">mini <span class="tab-count">' + nMini + '</span></button>';
       html += '</div>';
-      list = state.routines.filter(function(r) { return tab === 'mini' ? r.isMini : !r.isMini; });
-      emptyMsg = tab === 'mini'
+      if (tab === 'upcoming') {
+        list = state.routines.filter(function(r) { return r.schedule && !r.isMini; });
+        list.forEach(function(r) { nextMap[r.id] = nextOccurrence(r); });
+        list.sort(function(a, b) { return (nextMap[a.id] || '9999') < (nextMap[b.id] || '9999') ? -1 : 1; });
+      } else {
+        list = state.routines.filter(function(r) { return tab === 'mini' ? r.isMini : !r.isMini; });
+      }
+      emptyMsg = tab === 'upcoming' ? 'Nothing scheduled yet. Tap "+ schedule" on a routine, or "schedule" under your plan.' : tab === 'mini'
         ? 'No mini routines saved yet. Save one with "save as mini routine" to reuse it as a group in other events.'
         : 'No saved routines yet. Build a schedule, then tap "save as routine".';
     }
@@ -2380,8 +2732,8 @@ window.girlTimeAuth = (function() {
         var timeMin = r.time ? timeStrToMinutes(r.time) : null;
         var timeLabel = (mode !== 'insert' && !r.isMini && timeMin !== null) ? ' · ' + minutesToClock(timeMin) : '';
         html += '<div class="routine-item">';
-        html += '  <div><div class="routine-name">' + esc(r.name) + '</div>';
-        html += '  <div class="routine-meta">' + r.steps.length + ' step' + (r.steps.length === 1 ? '' : 's') + ' · ' + durLabel(Math.floor(totalMin/60), totalMin%60) + ' total' + timeLabel + '</div></div>';
+        html += '  <div>' + (nextMap[r.id] !== undefined ? '<div class="routine-when">' + (nextMap[r.id] ? whenLabel(nextMap[r.id]) : 'no upcoming days') + '</div>' : '') + '<div class="routine-name">' + esc(r.name) + '</div>';
+        html += '  <div class="routine-meta">' + r.steps.length + ' step' + (r.steps.length === 1 ? '' : 's') + ' · ' + durLabel(Math.floor(totalMin/60), totalMin%60) + ' total' + timeLabel + '</div>' + ((mode !== 'insert' && !r.isMini) ? '<button class="sched-tag" data-action="open-schedule-routine" data-id="' + r.id + '">' + (r.schedule ? scheduleLabel(r) : '+ schedule') + '</button>' : '') + '</div>';
         html += '  <div class="routine-btns">';
         if (mode === 'insert') {
           html += '    <button class="small-btn load" data-action="insert-routine-chunk" data-event="' + evId + '" data-id="' + r.id + '">add</button>';
@@ -2516,7 +2868,13 @@ window.girlTimeAuth = (function() {
     html += '  <li>Add the steps you need before it - start with whatever comes right before the event, then work backward (you can always drag to reorder)</li>';
     html += '  <li>Got a set of steps you reuse a lot, like your shower + hair routine? Check "this is a mini routine" when saving it (no time needed) - then drop it into any other event as one reusable group</li>';
     html += '  <li>See your full schedule and know exactly when to start</li>';
+    html += '  <li>Tap "schedule" to set it for a certain day or to repeat (like school on weekdays) - it loads itself that day and reminds you when it&#39;s time</li>';
     html += '</ol>';
+    html += '<div class="howto-kinds"><div class="howto-kinds-title">your saved routines, explained</div>';
+    html += '<div class="howto-kind"><span class="howto-kind-name">routine</span>a whole plan: event name, time, steps and notes. load it any time to plan the same thing again.</div>';
+    html += '<div class="howto-kind"><span class="howto-kind-name">mini routine</span>a reusable set of steps with no time, like your shower + hair routine. drop it into any plan as one group.</div>';
+    html += '<div class="howto-kind"><span class="howto-kind-name">upcoming</span>routines you&#39;ve scheduled for a day (like friday&#39;s party) or set to repeat (like school on weekdays). they load themselves on the day.</div>';
+    html += '</div>';
     html += '<div class="example-preview">';
     html += '  <div class="startby"><div class="eyebrow">start by</div><div class="time">' + minutesToClock(exSched.startOverall) + '</div></div>';
     html += renderTimelineHTML(exSched, EXAMPLE_EVENT.name, false, 'example');
@@ -2755,13 +3113,18 @@ window.girlTimeAuth = (function() {
       state.remDate = null;
       render();
     } else if (action === 'toggle-all-step-notify') {
-      var evAll = findEvent(state.modalEventId);
-      if (evAll) {
-        var flatAll = [];
-        evAll.steps.forEach(function(x) { (isChunk(x) ? x.children : [x]).forEach(function(c) { flatAll.push(c); }); });
+      var tgt = state.modal === 'schedule' ? (state.schedTarget || {}) : { eventId: state.modalEventId };
+      var rTgt = tgt.routineId ? state.routines.find(function(x) { return x.id === tgt.routineId; }) : null;
+      var flatAll = [];
+      if (rTgt) flatAll = rTgt.steps || [];
+      else {
+        var evAll = findEvent(tgt.eventId);
+        if (evAll) evAll.steps.forEach(function(x) { (isChunk(x) ? x.children : [x]).forEach(function(c) { flatAll.push(c); }); });
+      }
+      if (flatAll.length) {
         var turnOn = !flatAll.every(function(x) { return x.notify; });
         flatAll.forEach(function(x) { x.notify = turnOn; });
-        debounceSaveSession();
+        if (rTgt) saveRoutines(); else debounceSaveSession();
         render();
       }
     } else if (action === 'rem-pick') {
@@ -2807,6 +3170,83 @@ window.girlTimeAuth = (function() {
       state.noteOpen[eventId] = true;
       render();
       setTimeout(function() { var n = document.getElementById('eventNote-' + eventId); if (n) n.focus(); }, 50);
+    } else if (action === 'open-schedule' || action === 'open-schedule-routine') {
+      var today0 = ymd(new Date());
+      var rS = null, evS = null;
+      if (action === 'open-schedule') {
+        evS = findEvent(eventId);
+        state.schedTarget = { eventId: eventId };
+        rS = evS && evS.routineId ? state.routines.find(function(x) { return x.id === evS.routineId && !x.isMini; }) : null;
+      } else {
+        rS = state.routines.find(function(x) { return x.id === id; });
+        state.schedTarget = { routineId: id };
+      }
+      var sc0 = rS && rS.schedule;
+      state.sched = {
+        mode: sc0 && sc0.type === 'repeat' ? 'rep' : 'one',
+        date: sc0 && sc0.type === 'once' ? sc0.date : ((evS && evS.reminder && evS.reminder.date) || (evS ? calDefaultDate(evS) : today0)),
+        days: sc0 && sc0.type === 'repeat' ? (sc0.days || []).slice() : [1, 2, 3, 4, 5],
+        times: sc0 && sc0.type === 'repeat' && sc0.times ? Object.assign({}, sc0.times) : {},
+        showTimes: !!(sc0 && sc0.times && Object.keys(sc0.times).length)
+      };
+      state.modal = 'schedule';
+      render();
+    } else if (action === 'sched-mode') {
+      state.sched.mode = id;
+      render();
+    } else if (action === 'sched-pick') {
+      state.sched.date = id === 'tomorrow' ? addDays(ymd(new Date()), 1) : ymd(new Date());
+      render();
+    } else if (action === 'sched-day') {
+      var dn = parseInt(id, 10), di = state.sched.days.indexOf(dn);
+      if (di === -1) state.sched.days.push(dn); else state.sched.days.splice(di, 1);
+      render();
+    } else if (action === 'sched-days') {
+      state.sched.days = id === 'every' ? [1, 2, 3, 4, 5, 6, 0] : [1, 2, 3, 4, 5];
+      render();
+    } else if (action === 'sched-times') {
+      state.sched.showTimes = !state.sched.showTimes;
+      if (!state.sched.showTimes) state.sched.times = {};
+      render();
+    } else if (action === 'sched-confirm') {
+      confirmSchedule();
+    } else if (action === 'sched-remove') {
+      var rX = schedTargetRoutine();
+      if (rX) {
+        delete rX.schedule;
+        delete rX.skipDates;
+        saveRoutines();
+        state.events.forEach(function(e) { if (e.routineId === rX.id) { e.occurrence = undefined; e.autoLoaded = false; } });
+        debounceSaveSession();
+      }
+      state.modal = null;
+      checkAutoLoad();
+      render();
+      refreshAllReminders();
+      showToast('Schedule removed');
+    } else if (action === 'load-today') {
+      var rT = state.routines.find(function(x) { return x.id === id; });
+      if (rT && state.events[0]) {
+        loadOccurrence(state.events[0], rT, ymd(new Date()), true);
+        checkAutoLoad();
+        render();
+        refreshAllReminders();
+        showToast('Loaded "' + rT.name + '"');
+      }
+    } else if (action === 'skip-today') {
+      var rK = state.routines.find(function(x) { return x.id === id; });
+      if (rK) {
+        var td = ymd(new Date());
+        rK.skipDates = (rK.skipDates || []).filter(function(d) { return d >= td; });
+        if (rK.skipDates.indexOf(td) === -1) rK.skipDates.push(td);
+        saveRoutines();
+        var e0 = state.events[0];
+        if (e0 && e0.routineId === rK.id && e0.occurrence === td) { e0.occurrence = undefined; e0.autoLoaded = false; debounceSaveSession(); }
+        checkAutoLoad();
+        render();
+        refreshAllReminders();
+        showToast('Skipped today');
+      }
     } else if (action === 'open-menu') {
       state.modal = 'menu';
       render();

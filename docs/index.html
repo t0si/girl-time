@@ -918,6 +918,7 @@ body:has(.modal-backdrop.modal-top)::before{display:none}
 .howto-kind:first-of-type{border-top:none}
 .howto-kind-name{display:block;font-weight:700}
 .routines-tab{white-space:nowrap;padding-left:6px;padding-right:6px}
+.howto-kinds{margin:18px 0 4px}
 </style>
 </head>
 <body>
@@ -2866,20 +2867,19 @@ window.girlTimeAuth = (function() {
     html += '<ol class="howto-list">';
     html += '  <li>Set an event name and time</li>';
     html += '  <li>Add the steps you need before it - start with whatever comes right before the event, then work backward (you can always drag to reorder)</li>';
-    html += '  <li>Got a set of steps you reuse a lot, like your shower + hair routine? Check "this is a mini routine" when saving it (no time needed) - then drop it into any other event as one reusable group</li>';
-    html += '  <li>See your full schedule and know exactly when to start</li>';
-    html += '  <li>Tap "schedule" to set it for a certain day or to repeat (like school on weekdays) - it loads itself that day and reminds you when it&#39;s time</li>';
+    html += '  <li>Save steps you reuse (like shower + hair) as a mini routine, then drop them into any event</li>';
+    html += '  <li>Tap "schedule" to set it for a certain day or to repeat (like school on weekdays) - it loads itself that day and reminds you when it&#39;s time to start your routine</li>';
     html += '</ol>';
-    html += '<div class="howto-kinds"><div class="howto-kinds-title">your saved routines, explained</div>';
-    html += '<div class="howto-kind"><span class="howto-kind-name">routine</span>a whole plan: event name, time, steps and notes. load it any time to plan the same thing again.</div>';
-    html += '<div class="howto-kind"><span class="howto-kind-name">mini routine</span>a reusable set of steps with no time, like your shower + hair routine. drop it into any plan as one group.</div>';
-    html += '<div class="howto-kind"><span class="howto-kind-name">upcoming</span>routines you&#39;ve scheduled for a day (like friday&#39;s party) or set to repeat (like school on weekdays). they load themselves on the day.</div>';
-    html += '</div>';
     html += '<div class="example-preview">';
     html += '  <div class="startby"><div class="eyebrow">start by</div><div class="time">' + minutesToClock(exSched.startOverall) + '</div></div>';
     html += renderTimelineHTML(exSched, EXAMPLE_EVENT.name, false, 'example');
     html += '</div>';
     html += '<div class="example-caption">a 7:00 PM dinner means starting to get ready at ' + minutesToClock(exSched.startOverall) + '</div>';
+    html += '<div class="howto-kinds"><div class="howto-kinds-title">your saved routines, explained</div>';
+    html += '<div class="howto-kind"><span class="howto-kind-name">routine</span>a whole plan: event name, time, steps and notes. load it any time to plan the same thing again</div>';
+    html += '<div class="howto-kind"><span class="howto-kind-name">mini routine</span>a reusable set of steps with no time, like your shower + hair routine. drop it into any plan as one group</div>';
+    html += '<div class="howto-kind"><span class="howto-kind-name">upcoming</span>routines you&#39;ve scheduled for a day (like friday&#39;s party) or set to repeat (like school on weekdays). they load themselves on the day</div>';
+    html += '</div>';
     html += '</div></div>';
     return html;
   }

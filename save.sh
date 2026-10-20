@@ -4,7 +4,7 @@
 MSG="${1:-update}"
 cd "$(dirname "$0")" || exit 1
 git add -A
-if git commit -q -m "$MSG"; then git push -q && echo "✅ website saved"; else echo "· website: nothing new"; fi
+if git commit -q -m "$MSG" >/dev/null 2>&1; then git push -q && echo "✅ website saved"; else echo "· website: nothing new"; fi
 cd ios || exit 1
 git add -A
-if git commit -q -m "$MSG"; then git push -q && echo "✅ iOS app saved (private)"; else echo "· iOS app: nothing new"; fi
+if git commit -q -m "$MSG" >/dev/null 2>&1; then git push -q && echo "✅ iOS app saved (private)"; else echo "· iOS app: nothing new"; fi

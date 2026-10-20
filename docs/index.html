@@ -886,6 +886,12 @@ body:has(.modal-backdrop.modal-top)::before{display:none}
 .alert-before input::-webkit-inner-spin-button,.alert-before input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .alert-before input:focus{outline:none;box-shadow:none}
 .settings-sub{margin:6px 0 0 18px}
+.event-note{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:16px;line-height:1.4;padding:10px 14px;border-radius:14px;border:1.5px solid #F0D2DC;background:#FBF5F2;color:#5E2A45;resize:none}
+.event-note:focus{outline:none;border-color:#E3A3BA}
+.add-note-link{display:inline-block;background:none;border:none;padding:0;margin-top:12px;font-size:13px;color:#B65D80;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.note-box{background:#FDF0F4;border:1px solid #F3D3DE;border-radius:14px;padding:12px 14px;margin:0 0 14px;color:#5E2A45;font-size:14px;line-height:1.45}
+.note-box-title{font-size:12px;font-weight:700;color:#B65D80;letter-spacing:.03em;margin-bottom:2px}
+.note-box-text{white-space:pre-line}
 </style>
 </head>
 <body>
@@ -1152,6 +1158,21 @@ window.girlTimeAuth = (function() {
   var MAX_UNDO = 20;
 
   function uid() { return 's' + (idCounter++) + '_' + Math.random().toString(36).slice(2, 7); }
+
+  function eventNoteText(ev) {
+    var parts = [];
+    if (ev.note && ev.note.trim()) parts.push(ev.note.trim());
+    (ev.steps || []).forEach(function(x) {
+      if (isChunk(x) && x.note && x.note.trim()) parts.push('🎀 ' + x.name + ': ' + x.note.trim());
+    });
+    return parts.join('\n');
+  }
+
+  function renderNoteBox(ev) {
+    var t = eventNoteText(ev);
+    if (!t) return '';
+    return '<div class="note-box"><div class="note-box-title">&#128221; don&#39;t forget</div><div class="note-box-text">' + esc(t) + '</div></div>';
+  }
 
   function makeBlankEvent() {
     return { id: uid(), name: '', time: '', steps: [], isMiniMode: false };
@@ -1470,19 +1491,23 @@ window.girlTimeAuth = (function() {
           name: ev.name || '',
           time: ev.time || '',
           isMiniMode: !!ev.isMiniMode,
+          note: ev.note || '',
+          reminder: ev.reminder || undefined,
           steps: (ev.steps || []).map(function(s) {
             if (s.kind === 'chunk') {
               return {
                 id: s.id || uid(),
                 kind: 'chunk',
                 name: s.name || '',
+                note: s.note || '',
+                done: !!s.done,
                 collapsed: s.collapsed !== false,
                 children: (s.children || []).map(function(c) {
-                  return { id: c.id || uid(), label: c.label, hours: c.hours || 0, minutes: c.minutes || 0 };
+                  return { id: c.id || uid(), label: c.label, hours: c.hours || 0, minutes: c.minutes || 0, done: !!c.done, notify: !!c.notify };
                 })
               };
             }
-            return { id: s.id || uid(), label: s.label, hours: s.hours || 0, minutes: s.minutes || 0 };
+            return { id: s.id || uid(), label: s.label, hours: s.hours || 0, minutes: s.minutes || 0, done: !!s.done, notify: !!s.notify };
           })
         };
       });
@@ -1765,7 +1790,7 @@ window.girlTimeAuth = (function() {
     var alerts = [{
       emoji: '\uD83C\uDF80', label: 'time to start getting ready', min: sched.startOverall - off,
       title: off ? ('start getting ready in ' + off + ' min \uD83C\uDF80') : 'time to start getting ready \uD83C\uDF80',
-      body: (ev.name || 'your event') + (first ? ' \u00B7 first up: ' + first.emoji + ' ' + first.label : ''),
+      body: (ev.name || 'your event') + (first ? ' \u00B7 first up: ' + first.emoji + ' ' + first.label : '') + (eventNoteText(ev) ? '\n📝 ' + eventNoteText(ev).split('\n').join(' · ') : ''),
       at: dateAtMinutes(dateStr, sched.startOverall - off)
     }];
     flat.forEach(function(r) {
@@ -1998,7 +2023,7 @@ window.girlTimeAuth = (function() {
       title: '[routine] ' + (ev.name || 'your event'),
       start: dateAtMinutes(dateStr, sched.startOverall),
       end: dateAtMinutes(dateStr, sched.eventMin),
-      details: (ev.name || 'your event') + ' starts at ' + minutesToClock(sched.eventMin) + '\n\n' + calendarDetails(sched)
+      details: (ev.name || 'your event') + ' starts at ' + minutesToClock(sched.eventMin) + '\n\n' + (eventNoteText(ev) ? '📝 ' + eventNoteText(ev) + '\n\n' : '') + calendarDetails(sched)
     };
   }
 
@@ -2080,6 +2105,7 @@ window.girlTimeAuth = (function() {
       eventName: ev.name || '',
       time: ev.time || '',
       isMini: !!isMini,
+      note: eventNoteText(ev),
       steps: flatSteps
     };
     var replaceIdx = -1;
@@ -2105,6 +2131,7 @@ window.girlTimeAuth = (function() {
     ev.name = (r.eventName !== undefined) ? r.eventName : (r.name || ev.name);
     ev.time = (r.time !== undefined) ? r.time : ev.time;
     ev.steps = r.steps.map(function(s) { return { id: uid(), label: s.label, hours: s.hours, minutes: s.minutes }; });
+    ev.note = r.note || '';
     state.modal = null;
     debounceSaveSession();
     showToast('Loaded "' + r.name + '" - ' + ev.steps.length + ' step' + (ev.steps.length === 1 ? '' : 's'));
@@ -2124,6 +2151,7 @@ window.girlTimeAuth = (function() {
       id: uid(),
       kind: 'chunk',
       name: r.name,
+      note: r.note || '',
       collapsed: true,
       children: r.steps.map(function(s) { return { id: uid(), label: s.label, hours: s.hours, minutes: s.minutes }; })
     };
@@ -2206,6 +2234,12 @@ window.girlTimeAuth = (function() {
       html += '    <input type="checkbox" id="isMini-' + ev.id + '" data-event="' + ev.id + '"' + (ev.isMiniMode ? ' checked' : '') + '>';
       html += '    <span>this is a mini routine <span class="mini-toggle-hint">(no time needed)</span></span>';
       html += '  </label>';
+      if ((ev.note && ev.note.length) || (state.noteOpen && state.noteOpen[ev.id])) {
+        html += '  <label class="field-label" for="eventNote-' + ev.id + '" style="margin-top:14px;">&#128221; notes</label>';
+        html += '  <textarea id="eventNote-' + ev.id + '" class="event-note" rows="2" placeholder="e.g. bring skates + jacket, venmo grace">' + esc(ev.note || '') + '</textarea>';
+      } else {
+        html += '  <button class="add-note-link" data-action="open-note" data-event="' + ev.id + '">+ add a note</button>';
+      }
       html += '</div>';
 
       html += '<div class="add-step-card">';
@@ -2233,12 +2267,14 @@ window.girlTimeAuth = (function() {
         html += '  <div class="eyebrow">total time</div>';
         html += '  <div class="time">' + elapsedLabel(relSched.totalMinutes) + '</div>';
         html += '</div>';
+        html += renderNoteBox(ev);
         html += (state.settings && state.settings.showCheckboxes && !state.settings.checkHintSeen ? '<div class="check-hint">tap an emoji to check it off</div>' : '') + renderRelativeTimelineHTML(relSched, true, ev.id);
       } else if (sched.valid) {
         html += '<div class="startby">';
         html += '  <div class="eyebrow">start by</div>';
         html += '  <div class="time">' + minutesToClock(sched.startOverall) + '</div>';
         html += '</div>';
+        html += renderNoteBox(ev);
         html += (state.settings && state.settings.showCheckboxes && !state.settings.checkHintSeen ? '<div class="check-hint">tap an emoji to check it off</div>' : '') + renderTimelineHTML(sched, ev.name, true, ev.id);
       } else if (ev.steps.length) {
         html += '<div class="empty-msg">' + ev.steps.length + ' step' + (ev.steps.length === 1 ? '' : 's') +
@@ -2503,6 +2539,12 @@ window.girlTimeAuth = (function() {
         if (lbl) lbl.textContent = ev.name || 'Your event';
       });
 
+      var noteEl = document.getElementById('eventNote-' + ev.id);
+      if (noteEl) {
+        noteEl.addEventListener('input', function(e) { ev.note = e.target.value; debounceSaveSession(); });
+        noteEl.addEventListener('change', function() { render(); });
+      }
+
       var timeEl = document.getElementById('eventTime-' + ev.id);
       if (timeEl) {
         timeEl.addEventListener('input', function(e) {
@@ -2760,6 +2802,11 @@ window.girlTimeAuth = (function() {
       state.settings.alertOffset = parseInt(id, 10) || 0;
       debounceSaveSession();
       render();
+    } else if (action === 'open-note') {
+      state.noteOpen = state.noteOpen || {};
+      state.noteOpen[eventId] = true;
+      render();
+      setTimeout(function() { var n = document.getElementById('eventNote-' + eventId); if (n) n.focus(); }, 50);
     } else if (action === 'open-menu') {
       state.modal = 'menu';
       render();

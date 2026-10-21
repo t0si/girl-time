@@ -919,6 +919,29 @@ body:has(.modal-backdrop.modal-top)::before{display:none}
 .howto-kind-name{display:block;font-weight:700}
 .routines-tab{white-space:nowrap;padding-left:6px;padding-right:6px}
 .howto-kinds{margin:18px 0 4px}
+/* ---- compact layout (E2) ---- */
+#app{padding-top:calc(16px + env(safe-area-inset-top, 0px))}
+.header-row{align-items:center;margin-bottom:14px}
+.wordmark{font-size:23px}
+.menu-circle{width:36px;height:36px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface);color:var(--rose-deep);font-size:15px;line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+.event-card-header{margin-bottom:10px}
+.event-card{padding:14px 14px 12px;margin-bottom:12px}
+.add-step-card{padding:12px 14px 14px;margin-bottom:16px}
+.field-label{font-size:11px;margin-bottom:4px}
+input[type="text"], input[type="time"], input[type="number"]{height:38px;padding:8px 11px;border-radius:10px}
+.primary-btn{padding:9px 14px;font-size:14px;border-radius:10px}
+.add-step-card .primary-btn, .add-step-btn-row .primary-btn{margin-top:8px}
+.mini-toggle-row{margin-top:10px}
+.add-note-link{margin-top:8px}
+.event-note{font-size:15px;padding:8px 11px;border-radius:10px}
+.today-banner{padding:10px 12px;margin-bottom:12px;border-radius:14px}
+.startby{margin:2px 0 14px}
+.startby .time{font-size:34px}
+.rem-toggle{-webkit-appearance:none;appearance:none;width:100%;background:none;border-top:0;border-left:0;border-right:0;font:inherit;text-align:left;cursor:pointer;padding-left:0;padding-right:0;color:#5E2A45}
+.rem-toggle:not(.on){color:#B5A6AC}
+.rem-bell{margin-left:8px;font-size:13px}
+.cal-chip.alert-before input[type="number"]{width:34px;height:auto;min-height:0;margin:0;padding:0;border:none;border-bottom:1.5px solid currentColor;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:center}
+.rem-row.rem-toggle{font-size:14px}
 </style>
 </head>
 <body>
@@ -1977,7 +2000,17 @@ window.girlTimeAuth = (function() {
     if (!sc || r.isMini) return false;
     if ((r.skipDates || []).indexOf(dateStr) !== -1) return false;
     if (sc.type === 'once') return sc.date === dateStr;
-    if (sc.type === 'repeat') return (sc.days || []).indexOf(dateFromYmd(dateStr).getDay()) !== -1;
+    if (sc.type === 'repeat') {
+      if ((sc.days || []).indexOf(dateFromYmd(dateStr).getDay()) === -1) return false;
+      if (sc.end && sc.end.type === 'date' && dateStr > sc.end.date) return false;
+      if (sc.end && sc.end.type === 'count') {
+        if (dateStr < sc.end.start) return false;
+        var n = 0, d = sc.end.start;
+        for (var guard = 0; d <= dateStr && guard < 800; guard++) { if ((sc.days || []).indexOf(dateFromYmd(d).getDay()) !== -1) n++; d = addDays(d, 1); }
+        if (n > sc.end.count) return false;
+      }
+      return true;
+    }
     return false;
   }
   function nextOccurrence(r) {
@@ -2028,10 +2061,11 @@ window.girlTimeAuth = (function() {
     if (!sc) return '';
     if (sc.type === 'once') return '📅 ' + calLabel(sc.date);
     var key = DAY_ORDER.filter(function(d) { return (sc.days || []).indexOf(d) !== -1; });
-    if (key.length === 7) return '🔁 every day';
-    if (key.join() === '1,2,3,4,5') return '🔁 weekdays';
-    if (key.join() === '6,0') return '🔁 weekends';
-    return '🔁 ' + key.map(function(d) { return DAY_SHORT[d]; }).join(', ');
+    var base = key.length === 7 ? 'every day' : key.join() === '1,2,3,4,5' ? 'weekdays' : key.join() === '6,0' ? 'weekends' : key.map(function(d) { return DAY_SHORT[d]; }).join(', ');
+    var endTxt = '';
+    if (sc.end && sc.end.type === 'date') endTxt = ' · until ' + calLabel(sc.end.date).replace(/^[a-z]+, /, '');
+    if (sc.end && sc.end.type === 'count') endTxt = ' · ' + sc.end.count + ' times';
+    return '🔁 ' + base + endTxt;
   }
   function flattenEventSteps(ev) {
     var flat = [];
@@ -2078,6 +2112,7 @@ window.girlTimeAuth = (function() {
     var expired = false;
     state.routines.forEach(function(r) {
       if (r.schedule && r.schedule.type === 'once' && r.schedule.date < today) { delete r.schedule; delete r.skipDates; expired = true; }
+      else if (r.schedule && r.schedule.type === 'repeat' && r.schedule.end && !nextOccurrence(r)) { delete r.schedule; delete r.skipDates; expired = true; }
     });
     if (expired) saveRoutines();
     var cands = state.routines.filter(function(r) { return routineOccursOn(r, today); }).map(function(r) {
@@ -2144,6 +2179,14 @@ window.girlTimeAuth = (function() {
   }
   window.gtSetSchedDate = function(v) { if (v && state.sched) { state.sched.date = v; render(); } };
   window.gtSetSchedTime = function(day, v) { if (state.sched) state.sched.times[day] = v; };
+  window.gtSetSchedEndDate = function(v) { if (v && state.sched) { state.sched.end = { type: 'date', date: v }; render(); } };
+  window.gtSetSchedEndCount = function(v, el) {
+    var n = parseInt(v, 10);
+    if (!(n > 0) || !state.sched) return;
+    state.sched.end = { type: 'count', count: Math.min(n, 365) };
+    var row = el && el.closest('.cal-chips');
+    if (row) { row.querySelectorAll('.cal-chip').forEach(function(c) { c.classList.remove('on'); }); el.closest('.cal-chip').classList.add('on'); }
+  };
 
   function renderScheduleModal() {
     var ev = schedDraftEv();
@@ -2174,7 +2217,6 @@ window.girlTimeAuth = (function() {
         html += '<button class="sched-day' + (on ? ' on' : '') + '" data-action="sched-day" data-id="' + d + '" aria-pressed="' + (on ? 'true' : 'false') + '" aria-label="' + DAY_SHORT[d] + '">' + DAY_LETTERS[d] + '</button>';
       });
       html += '</div>';
-      html += '<div class="sched-quick"><button class="sched-link" data-action="sched-days" data-id="weekdays">weekdays</button><button class="sched-link" data-action="sched-days" data-id="every">every day</button></div>';
       var tR = schedTargetRoutine();
       var baseTime = (state.schedTarget || {}).routineId ? ((tR && tR.time) || '') : (ev.time || '');
       html += '<div class="sched-timeline">' + (baseTime ? 'at ' + esc(baseTime) + ' each day' : 'same time each day') + ' &middot; <button class="sched-link" data-action="sched-times">' + (dr.showTimes ? 'use the same time' : 'different times on some days') + '</button></div>';
@@ -2185,15 +2227,30 @@ window.girlTimeAuth = (function() {
         });
       }
     }
+    if (dr.mode === 'rep') {
+      var en = dr.end || { type: 'never' };
+      html += '<div class="field-label" style="margin-top:16px;">ends</div>';
+      html += '<div class="cal-chips">';
+      html += '<button class="cal-chip' + (en.type === 'never' ? ' on' : '') + '" data-action="sched-end-never">never</button>';
+      html += '<label class="cal-chip cal-chip-other' + (en.type === 'date' ? ' on' : '') + '"><span>' + (en.type === 'date' && en.date ? 'until ' + calLabel(en.date) : 'on a date') + '</span><input type="date" value="' + (en.date || addDays(ymd(new Date()), 28)) + '" min="' + ymd(new Date()) + '" onchange="window.gtSetSchedEndDate && window.gtSetSchedEndDate(this.value)" aria-label="end date"></label>';
+      html += '<label class="cal-chip alert-before' + (en.type === 'count' ? ' on' : '') + '"><span>after</span><input type="number" inputmode="numeric" min="1" max="365" value="' + (en.count || 10) + '" aria-label="number of times" onfocus="window.gtSetSchedEndCount && window.gtSetSchedEndCount(this.value, this)" oninput="window.gtSetSchedEndCount && window.gtSetSchedEndCount(this.value, this)"><span>times</span></label>';
+      html += '</div>';
+    }
     if (native && sched.valid) {
       html += '<div class="field-label" style="margin-top:16px;">reminders</div>';
       var allSteps = [];
       ev.steps.forEach(function(x) { (isChunk(x) ? x.children : [x]).forEach(function(c) { allSteps.push(c); }); });
       var allOn = allSteps.length > 0 && allSteps.every(function(x) { return x.notify; });
-      html += '<div class="settings-opt" style="margin:0 0 10px;"><div><div class="settings-opt-label">&#128276; alert me for every step</div><div class="settings-opt-sub">or choose steps one by one with &#9998;</div></div><button class="settings-switch' + (allOn ? ' on' : '') + '" data-action="toggle-all-step-notify" role="switch" aria-checked="' + (allOn ? 'true' : 'false') + '" aria-label="alert me for every step"></button></div>';
+      html += '<div class="settings-opt" style="margin:0 0 10px;"><div><div class="settings-opt-label">&#128276; alert me for every step</div><div class="settings-opt-sub">or tap steps below to turn alerts on or off</div></div><button class="settings-switch' + (allOn ? ' on' : '') + '" data-action="toggle-all-step-notify" role="switch" aria-checked="' + (allOn ? 'true' : 'false') + '" aria-label="alert me for every step"></button></div>';
+      var offA = alertOffset();
       html += '<div class="rem-list">';
-      reminderAlerts(ev, schedPreviewDate()).forEach(function(a) {
-        html += '<div class="rem-row"><span class="emoji">' + a.emoji + '</span>' + esc(a.label) + '<span class="rem-time">' + minutesToClock(a.min) + '</span></div>';
+      html += '<div class="rem-row"><span class="emoji">🎀</span>time to start getting ready<span class="rem-time">' + minutesToClock(sched.startOverall - offA) + '</span></div>';
+      sched.rows.forEach(function(row) {
+        (row.kind === 'chunk' ? row.children.map(function(c) { return Object.assign({}, c, { chunkId: row.id }); }) : [row]).forEach(function(st) {
+          var ref = stepRefIn(ev, st.id, st.chunkId);
+          var on = !!(ref && ref.notify);
+          html += '<button class="rem-row rem-toggle' + (on ? ' on' : '') + '" data-action="toggle-step-alert" data-id="' + st.id + '"' + (st.chunkId ? ' data-chunk="' + st.chunkId + '"' : '') + ' role="switch" aria-checked="' + (on ? 'true' : 'false') + '" aria-label="alert for ' + esc(st.label) + '"><span class="emoji">' + st.emoji + '</span>' + esc(st.label) + '<span class="rem-time">' + (on ? minutesToClock(st.start - offA) : 'off') + '</span><span class="rem-bell">' + (on ? '&#128276;' : '&#128277;') + '</span></button>';
+        });
       });
       html += '</div>';
       var off = alertOffset();
@@ -2220,7 +2277,11 @@ window.girlTimeAuth = (function() {
         var v = String(dr.times[k] || '').trim();
         if (dr.days.indexOf(+k) !== -1 && v && timeStrToMinutes(v) !== null && v !== r.time) times[k] = v;
       });
+      var oldStart = r.schedule && r.schedule.end && r.schedule.end.start;
+      var endS = dr.end || { type: 'never' };
       r.schedule = { type: 'repeat', days: dr.days.slice(), times: times };
+      if (endS.type === 'date' && endS.date) r.schedule.end = { type: 'date', date: endS.date };
+      if (endS.type === 'count' && endS.count > 0) r.schedule.end = { type: 'count', count: endS.count, start: oldStart || ymd(new Date()) };
     } else {
       r.schedule = { type: 'once', date: dr.date };
     }
@@ -2288,8 +2349,8 @@ window.girlTimeAuth = (function() {
     html += '<div class="settings-opt"><div><div class="settings-opt-label">show checkboxes</div><div class="settings-opt-sub">tap each step&#39;s emoji to check it off</div></div>';
     html += '<button class="settings-switch' + (st.showCheckboxes ? ' on' : '') + '" data-action="toggle-setting" data-id="showCheckboxes" role="switch" aria-checked="' + (st.showCheckboxes ? 'true' : 'false') + '" aria-label="show checkboxes"></button></div>';
     if (st.showCheckboxes) {
-      html += '<div class="settings-opt settings-sub"><div><div class="settings-opt-label">check mini routine steps one by one</div><div class="settings-opt-sub">when off, a whole mini routine checks off at once</div></div>';
-      html += '<button class="settings-switch' + (st.checkMiniSteps ? ' on' : '') + '" data-action="toggle-setting" data-id="checkMiniSteps" role="switch" aria-checked="' + (st.checkMiniSteps ? 'true' : 'false') + '" aria-label="check mini routine steps one by one"></button></div>';
+      html += '<div class="settings-opt settings-sub"><div><div class="settings-opt-label">include mini routine steps</div></div>';
+      html += '<button class="settings-switch' + (st.checkMiniSteps ? ' on' : '') + '" data-action="toggle-setting" data-id="checkMiniSteps" role="switch" aria-checked="' + (st.checkMiniSteps ? 'true' : 'false') + '" aria-label="include mini routine steps"></button></div>';
     }
     if (isNativeApp()) {
       var curOff = alertOffset();
@@ -2518,9 +2579,9 @@ window.girlTimeAuth = (function() {
 
     html += '<div class="header-row">';
     html += '  <div><div class="wordmark-row"><h1 class="wordmark">girl <span>time</span></h1></div>';
-    html += '  <div class="tagline">work backward from any event to know exactly when to start</div></div>';
+    html += '  </div>';
     html += '  <div class="header-links">';
-    html += '    <button class="routines-link" data-action="open-menu">menu</button>';
+    html += '    <button class="menu-circle" data-action="open-menu" aria-label="menu">&#9776;</button>';
     html += '  </div>';
     html += '</div>';
 
@@ -2553,7 +2614,7 @@ window.girlTimeAuth = (function() {
         }
       }
       html += '<div class="event-card-header">';
-      html += '  <button class="routines-link" data-action="open-routines" data-event="' + ev.id + '" style="padding-left:0;white-space:normal;">my saved routines</button>';
+      html += '  <button class="routines-link" data-action="open-routines" data-event="' + ev.id + '" style="padding-left:0;white-space:normal;">saved routines</button>';
       html += '  <div class="utility-row">';
       html += '    <button class="utility-btn undo" data-action="undo"' + (undoStack.length ? '' : ' disabled') + '>&#8634; undo</button>';
       html += '    <button class="utility-btn reset" data-action="open-reset-confirm">start over</button>';
@@ -2702,7 +2763,7 @@ window.girlTimeAuth = (function() {
       list = state.routines.filter(function(r) { return r.isMini; });
       emptyMsg = 'No mini routines saved yet. Save one with "save as mini routine" to reuse it as a group here.';
     } else {
-      html += '<div class="modal-title">my saved routines</div>';
+      html += '<div class="modal-title">saved routines</div>';
       var nSched = state.routines.filter(function(r) { return r.schedule && !r.isMini; }).length;
       var tab = state.routinesTab || (nSched ? 'upcoming' : 'routines');
       var nMini = state.routines.filter(function(r) { return r.isMini; }).length;
@@ -3187,7 +3248,8 @@ window.girlTimeAuth = (function() {
         date: sc0 && sc0.type === 'once' ? sc0.date : ((evS && evS.reminder && evS.reminder.date) || (evS ? calDefaultDate(evS) : today0)),
         days: sc0 && sc0.type === 'repeat' ? (sc0.days || []).slice() : [1, 2, 3, 4, 5],
         times: sc0 && sc0.type === 'repeat' && sc0.times ? Object.assign({}, sc0.times) : {},
-        showTimes: !!(sc0 && sc0.times && Object.keys(sc0.times).length)
+        showTimes: !!(sc0 && sc0.times && Object.keys(sc0.times).length),
+        end: sc0 && sc0.end ? Object.assign({}, sc0.end) : { type: 'never' }
       };
       state.modal = 'schedule';
       render();
@@ -3207,6 +3269,21 @@ window.girlTimeAuth = (function() {
     } else if (action === 'sched-times') {
       state.sched.showTimes = !state.sched.showTimes;
       if (!state.sched.showTimes) state.sched.times = {};
+      render();
+    } else if (action === 'sched-end-never') {
+      state.sched.end = { type: 'never' };
+      render();
+    } else if (action === 'toggle-step-alert') {
+      var tg = state.schedTarget || {};
+      if (tg.routineId) {
+        var rr = state.routines.find(function(x) { return x.id === tg.routineId; });
+        var ix = parseInt(String(id).replace(/^r/, ''), 10);
+        if (rr && rr.steps[ix]) { rr.steps[ix].notify = !rr.steps[ix].notify; saveRoutines(); }
+      } else {
+        var evt = findEvent(tg.eventId);
+        var refT = evt && stepRefIn(evt, id, chunkId);
+        if (refT) { refT.notify = !refT.notify; debounceSaveSession(); }
+      }
       render();
     } else if (action === 'sched-confirm') {
       confirmSchedule();

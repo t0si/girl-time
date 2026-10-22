@@ -942,6 +942,25 @@ input[type="text"], input[type="time"], input[type="number"]{height:38px;padding
 .rem-bell{margin-left:8px;font-size:13px}
 .cal-chip.alert-before input[type="number"]{width:34px;height:auto;min-height:0;margin:0;padding:0;border:none;border-bottom:1.5px solid currentColor;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:center}
 .rem-row.rem-toggle{font-size:14px}
+#tour-layer{position:fixed;inset:0;z-index:2000;pointer-events:none}
+#tour-layer .tour-hole{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(53,36,47,.5);outline:2px solid var(--rose);outline-offset:0;pointer-events:none;transition:all .25s ease}
+#tour-layer .tour-block{position:fixed;pointer-events:auto;background:transparent}
+#tour-layer .tour-dim{position:fixed;inset:0;background:rgba(53,36,47,.5);pointer-events:auto}
+#tour-layer .tour-card{position:fixed;pointer-events:auto;background:var(--surface);border-radius:16px;box-shadow:0 10px 30px rgba(53,36,47,.22);padding:14px 16px 12px;box-sizing:border-box;color:var(--ink);animation:tourIn .2s ease}
+#tour-layer .tour-center{left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,calc(100vw - 32px));text-align:center;padding:24px 20px 16px;animation:none}
+#tour-layer .tour-text{font-size:14.5px;line-height:1.45;font-weight:600;color:var(--berry)}
+#tour-layer .tour-title{font-family:'Fraunces',serif;font-size:24px;font-weight:700;color:var(--berry);margin-bottom:8px}
+#tour-layer .tour-big-emoji{font-size:38px;line-height:1;margin-bottom:10px}
+#tour-layer .tour-center .primary-btn{margin-top:18px}
+#tour-layer .tour-foot{display:flex;align-items:center;gap:6px;margin-top:10px}
+#tour-layer .tour-center .tour-foot{margin-top:18px}
+#tour-layer .tour-count{font-size:12px;color:var(--rose-deep);font-weight:700;margin-right:auto}
+#tour-layer .tour-skip{background:none;border:none;color:var(--rose-deep);font:inherit;font-size:13.5px;font-weight:600;padding:8px 10px;cursor:pointer}
+#tour-layer .tour-center > .tour-skip{display:block;margin:8px auto 0}
+#tour-layer .tour-next{background:var(--rose);color:#fff;border:none;border-radius:999px;font:inherit;font-size:13.5px;font-weight:700;padding:8px 18px;cursor:pointer}
+@keyframes tourIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.get-app-btn{display:flex;align-items:center;justify-content:center;gap:8px;margin:26px auto 4px;max-width:280px;height:44px;border-radius:999px;background:var(--berry);color:#fff;font-weight:700;font-size:14.5px;text-decoration:none}
+.get-app-btn:active{opacity:.85}
 </style>
 </head>
 <body>
@@ -1205,6 +1224,7 @@ window.girlTimeAuth = (function() {
   var saveTimer = null;
   var idCounter = 1;
   var undoStack = [];
+  var APP_STORE_URL = 'https://apps.apple.com/us/app/girl-time-reverse-planner/id6815291977';
   var MAX_UNDO = 20;
 
   function uid() { return 's' + (idCounter++) + '_' + Math.random().toString(36).slice(2, 7); }
@@ -1596,6 +1616,7 @@ window.girlTimeAuth = (function() {
       render();
       refreshAllReminders();
       startAutoLoadWatch();
+      maybeStartTutorial();
     });
   }
 
@@ -1615,6 +1636,7 @@ window.girlTimeAuth = (function() {
       render();
       refreshAllReminders();
       startAutoLoadWatch();
+      maybeStartTutorial();
     });
   }
 
@@ -1676,12 +1698,12 @@ window.girlTimeAuth = (function() {
   }
 
   // ---------- actions ----------
-  function showToast(msg) {
+  function showToast(msg, ms) {
     var t = document.getElementById('toast');
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(t._timer);
-    t._timer = setTimeout(function() { t.classList.remove('show'); }, 1800);
+    t._timer = setTimeout(function() { t.classList.remove('show'); }, ms || 1800);
   }
 
   function addEvent() {
@@ -1713,6 +1735,7 @@ window.girlTimeAuth = (function() {
     var newStep = { id: uid(), label: label.trim(), hours: hours || 0, minutes: minutes || 0 };
     ev.steps.unshift(newStep); // new step goes before whatever's already there, further from the event
     recordStepMemory(newStep.label, newStep.hours, newStep.minutes);
+    tourOnStepAdded();
     debounceSaveSession();
     render();
   }
@@ -2145,7 +2168,7 @@ window.girlTimeAuth = (function() {
     window.__gtAutoWatch = true;
     function tick() {
       var a = document.activeElement;
-      if (!state.loaded || state.modal || (a && /INPUT|TEXTAREA/.test(a.tagName))) return;
+      if (!state.loaded || state.modal || state.tour || (a && /INPUT|TEXTAREA/.test(a.tagName))) return;
       if (checkAutoLoad()) { render(); refreshAllReminders(); }
     }
     document.addEventListener('visibilitychange', function() { if (!document.hidden) tick(); });
@@ -2315,6 +2338,8 @@ window.girlTimeAuth = (function() {
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">menu</div>';
     html += '<button class="menu-item" data-action="open-example"><span class="emoji menu-ic">&#128161;</span><span>how it works</span><span class="menu-chev">&rsaquo;</span></button>';
+    if (!isNativeApp()) html += '<a class="menu-item" href="' + APP_STORE_URL + '" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;"><span class="emoji menu-ic">&#128241;</span><span>download the iPhone app</span><span class="menu-chev">&rsaquo;</span></a>';
+    html += '<button class="menu-item" data-action="start-tutorial"><span class="emoji menu-ic">&#127872;</span><span>replay tutorial</span><span class="menu-chev">&rsaquo;</span></button>';
     html += '<button class="menu-item" data-action="open-settings"><span class="emoji menu-ic">&#9881;&#65039;</span><span>settings</span><span class="menu-chev">&rsaquo;</span></button>';
     if (state.user) {
       html += '<button class="menu-item" data-action="open-account"><span class="emoji menu-ic">&#128100;</span><span>account<div class="menu-sub">' + esc(state.user.email || '') + '</div></span><span class="menu-chev">&rsaquo;</span></button>';
@@ -2568,6 +2593,232 @@ window.girlTimeAuth = (function() {
   }
 
   var renderedModal = null;
+  // ---------- first-open tutorial ----------
+  var TOUR_BACKUP_KEY = 'girltime:tourBackup';
+  function tourEv() { return state.events[0]; }
+  function tourStartTime() {
+    var ev = tourEv();
+    var s = ev ? computeSchedule(ev.time, ev.steps) : null;
+    return s && s.valid ? minutesToClock(s.startOverall) : '6:10 PM';
+  }
+  var TOUR_STEPS = [
+    { center: true, welcome: true },
+    { target: '.event-card', text: function() { return 'first, what are you getting ready for? we filled in an example: dinner at 7:00 PM'; } },
+    { target: '.add-step-card', kind: 'add', fill: ['drive', 0, 20], text: function() { return 'now add your steps, starting with what happens right before the event. tap “+ add step” to add the drive'; } },
+    { target: '.add-step-card', kind: 'add', fill: ['shower', 0, 30], text: function() { return 'keep working backward. tap “+ add step” to add a shower before the drive'; } },
+    { target: '.startby', text: function() { return 'girl time works backward from 7:00 PM, so you should start getting ready at ' + tourStartTime() + ' ✨'; } },
+    { target: '.step-row .step-actions', text: function() { return 'tap ✎ to edit a step, or hold and drag ☰ to rearrange'; } },
+    { target: '.routines-link', text: function() { return 'plans you do again live here: full routines, mini routines and what’s upcoming'; } },
+    { target: '[data-action="open-save"]', text: function() { return 'save this as a routine, or as a mini routine: a set of steps (like shower + hair) you can drop into any plan'; } },
+    { target: '[data-action="open-schedule"]', text: function() { return isNativeApp() ? 'schedule it for a day or have it repeat. it loads itself and sends you a notification when it’s time to start' : 'schedule it for a day or have it repeat. it loads itself on the day, ready to go'; } },
+    { target: '.menu-circle', text: function() { return 'turn on checkboxes in settings, and replay this tutorial any time from the menu'; } },
+    { center: true, nativeOnly: true, emoji: '📱', title: 'add girl time to your lock screen', text: function() { return 'see your start time and each step at a glance. press and hold your lock screen → customize → girl time'; } },
+    { center: true, done: true }
+  ];
+  function tourSteps() { return TOUR_STEPS.filter(function(s) { return !s.nativeOnly || isNativeApp(); }); }
+
+  function startTutorial() {
+    if (state.tour) return;
+    var backup = {
+      events: JSON.parse(JSON.stringify(state.events)),
+      stepMemory: JSON.parse(JSON.stringify(state.stepMemory || {})),
+      undo: undoStack.slice(),
+      todayBanner: state.todayBanner || null
+    };
+    try { localStorage.setItem(TOUR_BACKUP_KEY, JSON.stringify(backup)); } catch (e) {}
+    state.tour = { step: 0, backup: backup };
+    state.modal = null;
+    state.todayBanner = null;
+    undoStack.length = 0;
+    state.events = [{ id: uid(), name: 'dinner with grace', time: '7:00 PM', steps: [], isMiniMode: false }];
+    render();
+    window.scrollTo(0, 0);
+  }
+
+  function endTutorial() {
+    var t = state.tour;
+    if (!t) return;
+    var b = t.backup;
+    state.tour = null;
+    state.events = b.events && b.events.length ? b.events : [makeBlankEvent()];
+    state.stepMemory = b.stepMemory || {};
+    undoStack.length = 0;
+    (b.undo || []).forEach(function(u) { undoStack.push(u); });
+    state.todayBanner = b.todayBanner;
+    state.settings = state.settings || {};
+    state.settings.tutorialDone = true;
+    state.settings.tutorialHintSeen = true;
+    saveStepMemory();
+    debounceSaveSession();
+    try { localStorage.removeItem(TOUR_BACKUP_KEY); } catch (e) {}
+    render();
+    window.scrollTo(0, 0);
+  }
+
+  // if the app closed mid-tutorial, put the person's real plan back
+  function recoverTourBackup() {
+    var raw = null;
+    try { raw = localStorage.getItem(TOUR_BACKUP_KEY); } catch (e) {}
+    if (!raw) return false;
+    try {
+      var b = JSON.parse(raw);
+      state.events = b.events && b.events.length ? b.events : [makeBlankEvent()];
+      state.stepMemory = b.stepMemory || {};
+      state.settings.tutorialDone = true;
+      saveStepMemory();
+      debounceSaveSession();
+    } catch (e) {}
+    try { localStorage.removeItem(TOUR_BACKUP_KEY); } catch (e) {}
+    return true;
+  }
+
+  function maybeStartTutorial() {
+    if (window.__gtTourChecked) return;
+    window.__gtTourChecked = true;
+    state.settings = state.settings || {};
+    if (recoverTourBackup()) { render(); return; }
+    if (state.settings.tutorialDone) return;
+    var ev = state.events[0];
+    var fresh = !state.routines.length && state.events.length <= 1 && (!ev || (!ev.name && !ev.time && !ev.steps.length)) && !Object.keys(state.stepMemory || {}).length;
+    if (fresh) { startTutorial(); return; }
+    state.settings.tutorialDone = true;
+    if (!state.settings.tutorialHintSeen) {
+      state.settings.tutorialHintSeen = true;
+      setTimeout(function() { showToast('new: replay the tutorial anytime from the ☰ menu', 4500); }, 600);
+    }
+    debounceSaveSession();
+  }
+
+  function tourGo(n) {
+    var steps = tourSteps();
+    if (!state.tour) return;
+    if (n >= steps.length) { endTutorial(); return; }
+    state.tour.step = n;
+    state.tour.positioned = false;
+    renderTour();
+  }
+
+  function tourOnStepAdded() {
+    if (!state.tour) return;
+    var s = tourSteps()[state.tour.step];
+    if (s && s.kind === 'add') { state.tour.step += 1; state.tour.positioned = false; }
+  }
+
+  function tourLayer() {
+    var el = document.getElementById('tour-layer');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'tour-layer';
+      document.body.appendChild(el);
+      el.addEventListener('click', function(e) {
+        var b = e.target.closest('[data-tour]');
+        if (!b) { e.stopPropagation(); return; }
+        var a = b.getAttribute('data-tour');
+        if (a === 'next') tourGo(state.tour.step + 1);
+        else if (a === 'skip' || a === 'finish') endTutorial();
+      });
+      window.addEventListener('resize', function() { if (state.tour) positionTour(); });
+      window.addEventListener('scroll', function() { if (state.tour) positionTour(); }, { passive: true });
+    }
+    return el;
+  }
+
+  function renderTour() {
+    var layer = document.getElementById('tour-layer');
+    if (!state.tour) { if (layer) layer.innerHTML = ''; document.body.classList.remove('touring'); return; }
+    layer = tourLayer();
+    document.body.classList.add('touring');
+    var steps = tourSteps();
+    var s = steps[state.tour.step];
+    var target = s.target ? document.querySelector('#app ' + s.target) : null;
+    if (s.target && !target) { tourGo(state.tour.step + 1); return; }
+
+    var total = steps.length - 2; // not counting welcome + done cards
+    var html = '';
+    if (s.center) {
+      html += '<div class="tour-dim"></div><div class="tour-card tour-center">';
+      if (s.welcome) {
+        html += '<div class="tour-big-emoji emoji">🎀</div><div class="tour-title">welcome to girl time</div>';
+        html += '<div class="tour-text">plan backward from any event so you know exactly when to start getting ready</div>';
+        html += '<button class="primary-btn" data-tour="next">show me how</button><button class="tour-skip" data-tour="skip">skip</button>';
+      } else if (s.done) {
+        html += '<div class="tour-big-emoji emoji">🎀</div><div class="tour-title">you’re ready</div>';
+        html += '<div class="tour-text">we cleared the example so you can start fresh</div>';
+        html += '<button class="primary-btn" data-tour="finish">start planning</button>';
+      } else {
+        html += '<div class="tour-big-emoji emoji">' + s.emoji + '</div><div class="tour-title">' + esc(s.title) + '</div>';
+        html += '<div class="tour-text">' + esc(s.text()) + '</div>';
+        html += '<div class="tour-foot"><span class="tour-count">' + state.tour.step + ' of ' + total + '</span><button class="tour-skip" data-tour="skip">skip</button><button class="tour-next" data-tour="next">next</button></div>';
+      }
+      html += '</div>';
+      layer.innerHTML = html;
+      return;
+    }
+
+    html += '<div class="tour-hole"></div>';
+    html += '<div class="tour-block tb-top"></div><div class="tour-block tb-bottom"></div><div class="tour-block tb-left"></div><div class="tour-block tb-right"></div>';
+    if (s.kind !== 'add') html += '<div class="tour-block tb-hole"></div>';
+    html += '<div class="tour-card tour-tip"><div class="tour-text">' + esc(s.text()) + '</div>';
+    html += '<div class="tour-foot"><span class="tour-count">' + state.tour.step + ' of ' + total + '</span><button class="tour-skip" data-tour="skip">skip</button>';
+    if (s.kind !== 'add') html += '<button class="tour-next" data-tour="next">next</button>';
+    html += '</div></div>';
+    layer.innerHTML = html;
+
+    if (s.fill) {
+      var ev = tourEv();
+      var l = document.getElementById('stepLabel-' + ev.id);
+      var h = document.getElementById('stepHours-' + ev.id);
+      var m = document.getElementById('stepMinutes-' + ev.id);
+      if (l && !l.value) l.value = s.fill[0];
+      if (h && !h.value && s.fill[1]) h.value = s.fill[1];
+      if (m && !m.value) m.value = s.fill[2];
+      var hint = document.getElementById('stepHint-' + ev.id);
+      if (hint) hint.style.display = 'none';
+    }
+    if (!state.tour.positioned) {
+      state.tour.positioned = true;
+      var r0 = target.getBoundingClientRect();
+      var vh = window.innerHeight;
+      if (r0.top < 70 || r0.bottom > vh - 200) {
+        var y = window.scrollY + r0.top - Math.max(70, (vh - r0.height) / 2 - 90);
+        window.scrollTo(0, Math.max(0, y));
+      }
+    }
+    positionTour();
+  }
+
+  function positionTour() {
+    var layer = document.getElementById('tour-layer');
+    if (!state.tour || !layer) return;
+    var s = tourSteps()[state.tour.step];
+    if (!s || s.center) return;
+    var target = document.querySelector('#app ' + s.target);
+    if (!target) return;
+    var r = target.getBoundingClientRect();
+    var pad = 6, vw = window.innerWidth, vh = window.innerHeight;
+    var x = Math.max(4, r.left - pad), y = r.top - pad, w = Math.min(vw - 8, r.width + pad * 2), h = r.height + pad * 2;
+    function put(sel, l, t, ww, hh) {
+      var el = layer.querySelector(sel);
+      if (!el) return;
+      el.style.left = l + 'px'; el.style.top = t + 'px'; el.style.width = Math.max(0, ww) + 'px'; el.style.height = Math.max(0, hh) + 'px';
+    }
+    put('.tour-hole', x, y, w, h);
+    put('.tb-hole', x, y, w, h);
+    put('.tb-top', 0, 0, vw, y);
+    put('.tb-bottom', 0, y + h, vw, vh - (y + h));
+    put('.tb-left', 0, y, x, h);
+    put('.tb-right', x + w, y, vw - (x + w), h);
+    var tip = layer.querySelector('.tour-tip');
+    if (!tip) return;
+    var tw = Math.min(340, vw - 32);
+    tip.style.width = tw + 'px';
+    var th = tip.offsetHeight;
+    var left = Math.min(Math.max(16, r.left + r.width / 2 - tw / 2), vw - tw - 16);
+    var top = (y + h + 12 + th < vh - 12) ? y + h + 12 : Math.max(12, y - th - 12);
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+
   function render() {
     var app = document.getElementById('app');
     if (!state.loaded) {
@@ -2706,6 +2957,9 @@ window.girlTimeAuth = (function() {
 
     // "+ add another event" button removed for now - addEvent() still works if re-enabled later
 
+    if (!isNativeApp()) {
+      html += '<a class="get-app-btn" href="' + APP_STORE_URL + '" target="_blank" rel="noopener"><span class="emoji">&#128241;</span> download the girl time app</a>';
+    }
     html += '<div class="app-footer">';
     html += '  <div><span class="emoji">&#127800;</span> created by Marina in sept 2026</div>';
     html += '  <div>last updated: oct 2026</div>';
@@ -2746,6 +3000,7 @@ window.girlTimeAuth = (function() {
     renderedModal = state.modal;
     app.innerHTML = html;
     attachHandlers();
+    renderTour();
   }
 
   function renderRoutinesModal() {
@@ -3044,6 +3299,7 @@ window.girlTimeAuth = (function() {
     var id = btn.getAttribute('data-id');
     var eventId = btn.getAttribute('data-event');
     var chunkId = btn.getAttribute('data-chunk');
+    if (state.tour && action !== 'add-step') return;
 
     if (action === 'add-step') {
       var label = document.getElementById('stepLabel-' + eventId).value;
@@ -3324,6 +3580,9 @@ window.girlTimeAuth = (function() {
         refreshAllReminders();
         showToast('Skipped today');
       }
+    } else if (action === 'start-tutorial') {
+      state.modal = null;
+      startTutorial();
     } else if (action === 'open-menu') {
       state.modal = 'menu';
       render();

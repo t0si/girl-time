@@ -1602,6 +1602,7 @@ window.girlTimeAuth = (function() {
       if (sessionRes.status === 'fulfilled' && sessionRes.value) {
         try { parsed = JSON.parse(sessionRes.value); } catch (e) { console.error('parse session failed', e); }
       }
+      tourAbortForReload();
       applySessionData(parsed); applySettings(parsed);
       if (routinesRes.status === 'fulfilled' && routinesRes.value) {
         try { state.routines = JSON.parse(routinesRes.value) || []; }
@@ -1626,6 +1627,7 @@ window.girlTimeAuth = (function() {
       if (v) { try { parsed = JSON.parse(v); } catch (e) {} }
       return safeGet(STORAGE_KEY_ROUTINES);
     }).then(function(v) {
+      tourAbortForReload();
       applySessionData(parsed); applySettings(parsed);
       if (v) { try { state.routines = JSON.parse(v) || []; } catch (e) {} }
       return safeGet(STORAGE_KEY_STEP_MEMORY);
@@ -2612,7 +2614,7 @@ window.girlTimeAuth = (function() {
     { target: '[data-action="open-save"]', text: function() { return 'save this as a routine, or as a mini routine: a set of steps (like shower + hair) you can drop into any plan'; } },
     { target: '[data-action="open-schedule"]', text: function() { return isNativeApp() ? 'schedule it for a day or have it repeat. it loads itself and sends you a notification when it’s time to start' : 'schedule it for a day or have it repeat. it loads itself on the day, ready to go'; } },
     { target: '.menu-circle', text: function() { return 'turn on checkboxes in settings, and replay this tutorial any time from the menu'; } },
-    { center: true, nativeOnly: true, emoji: '📱', title: 'add girl time to your lock screen', text: function() { return 'see your start time and each step at a glance. press and hold your lock screen → customize → girl time'; } },
+    { center: true, nativeOnly: true, emoji: '📱', title: 'add girl time widget to your lock screen', text: function() { return 'see your start time and each step at a glance. press and hold your lock screen → customize → girl time'; } },
     { center: true, done: true }
   ];
   function tourSteps() { return TOUR_STEPS.filter(function(s) { return !s.nativeOnly || isNativeApp(); }); }
@@ -2672,8 +2674,25 @@ window.girlTimeAuth = (function() {
     return true;
   }
 
+  var tourLoadGen = 0;
+  function tourAbortForReload() {
+    tourLoadGen++;
+    if (state.tour) {
+      state.tour = null;
+      try { localStorage.removeItem(TOUR_BACKUP_KEY); } catch (e) {}
+      renderTour();
+    }
+    window.__gtTourChecked = false;
+  }
+
   function maybeStartTutorial() {
-    if (window.__gtTourChecked) return;
+    // wait a moment so a signed-in account can finish loading its real data first
+    var gen = tourLoadGen;
+    setTimeout(function() { if (gen === tourLoadGen) checkTutorial(); }, 1500);
+  }
+
+  function checkTutorial() {
+    if (window.__gtTourChecked || state.tour) return;
     window.__gtTourChecked = true;
     state.settings = state.settings || {};
     if (recoverTourBackup()) { render(); return; }

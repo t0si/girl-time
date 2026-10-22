@@ -886,6 +886,13 @@ body:has(.modal-backdrop.modal-top)::before{display:none}
 .alert-before input::-webkit-inner-spin-button,.alert-before input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .alert-before input:focus{outline:none;box-shadow:none}
 .settings-sub{margin:6px 0 0 18px}
+.settings-group{display:block}
+.settings-row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.settings-subrow{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.settings-sub-label{font-size:13.5px;color:var(--rose-deep);font-weight:600}
+.settings-switch.small{width:38px;height:23px;min-width:38px}
+.settings-switch.small::after{top:2.5px;left:2.5px;width:18px;height:18px}
+.settings-switch.small.on::after{left:17.5px}
 .event-note{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:16px;line-height:1.4;padding:10px 14px;border-radius:14px;border:1.5px solid #F0D2DC;background:#FBF5F2;color:#5E2A45;resize:none}
 .event-note:focus{outline:none;border-color:#E3A3BA}
 .add-note-link{display:inline-block;background:none;border:none;padding:0;margin-top:12px;font-size:13px;color:#B65D80;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
@@ -2373,12 +2380,13 @@ window.girlTimeAuth = (function() {
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">settings</div>';
-    html += '<div class="settings-opt"><div><div class="settings-opt-label">show checkboxes</div><div class="settings-opt-sub">tap each step&#39;s emoji to check it off</div></div>';
+    html += '<div class="settings-opt settings-group"><div class="settings-row"><div><div class="settings-opt-label">show checkboxes</div><div class="settings-opt-sub">tap each step&#39;s emoji to check it off</div></div>';
     html += '<button class="settings-switch' + (st.showCheckboxes ? ' on' : '') + '" data-action="toggle-setting" data-id="showCheckboxes" role="switch" aria-checked="' + (st.showCheckboxes ? 'true' : 'false') + '" aria-label="show checkboxes"></button></div>';
     if (st.showCheckboxes) {
-      html += '<div class="settings-opt settings-sub"><div><div class="settings-opt-label">include mini routine steps</div></div>';
-      html += '<button class="settings-switch' + (st.checkMiniSteps ? ' on' : '') + '" data-action="toggle-setting" data-id="checkMiniSteps" role="switch" aria-checked="' + (st.checkMiniSteps ? 'true' : 'false') + '" aria-label="include mini routine steps"></button></div>';
+      html += '<div class="settings-row settings-subrow"><div class="settings-sub-label">include mini routine steps</div>';
+      html += '<button class="settings-switch small' + (st.checkMiniSteps ? ' on' : '') + '" data-action="toggle-setting" data-id="checkMiniSteps" role="switch" aria-checked="' + (st.checkMiniSteps ? 'true' : 'false') + '" aria-label="include mini routine steps"></button></div>';
     }
+    html += '</div>';
     if (isNativeApp()) {
       var curOff = alertOffset();
       var beforeVal = curOff > 0 ? curOff : ((state.settings && state.settings.lastAlertBefore) || 5);

@@ -3047,7 +3047,6 @@ window.girlTimeAuth = (function() {
     }
     html += '<div class="app-footer">';
     html += '  <div><span class="emoji">&#127800;</span> created by Marina in sept 2026</div>';
-    html += '  <div>last updated: oct 2026</div>';
     html += '  <div><a href="privacy.html" style="color:inherit;text-decoration:underline;">privacy policy</a></div>';
     html += '</div>';
 
@@ -3270,6 +3269,7 @@ window.girlTimeAuth = (function() {
     html += '  <li>Add the steps you need before it - start with whatever comes right before the event, then work backward (you can always drag to reorder)</li>';
     html += '  <li>Save steps you reuse (like shower + hair) as a mini routine, then drop them into any event</li>';
     html += '  <li>Tap "schedule" to set it for a certain day or to repeat (like school on weekdays) - it loads itself that day and reminds you when it&#39;s time to start your routine</li>';
+    if (isNativeApp()) html += '  <li>Add the girl time widget to your lock screen to see your start time and steps at a glance (press and hold your lock screen, then tap customize)</li>';
     html += '</ol>';
     html += '<div class="example-preview">';
     html += '  <div class="startby"><div class="eyebrow">start by</div><div class="time">' + minutesToClock(exSched.startOverall) + '</div></div>';

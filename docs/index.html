@@ -992,6 +992,45 @@ input[type="text"], input[type="time"], input[type="number"]{height:38px;padding
 .clear-checks-btn,.checks-dot{font-size:14px}
 .toast{font-size:14px}
 #tour-layer .tour-count{font-size:13px}
+
+/* ---- nov 2026 polish ---- */
+.event-section{padding-top:14px}
+.header-row{margin-bottom:12px}
+.menu-circle{position:relative}
+.menu-bars{position:absolute;left:50%;top:50%;width:14px;height:1.75px;margin:-0.875px 0 0 -7px;border-radius:2px;background:currentColor;box-shadow:0 -4.5px 0 currentColor,0 4.5px 0 currentColor}
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+.howto-kinds{margin-top:30px}
+/* top sheets: keep the status bar area covered and the close button reachable while scrolling */
+body:has(.modal-backdrop.modal-top)::before,body:has(.modal-backdrop.menu-top)::before{display:block;background:var(--cream)}
+.modal-backdrop.modal-top .modal-sheet,.modal-backdrop.menu-top .modal-sheet{max-height:100%}
+/* every sheet: never taller than the space below the status bar, close button stays put while scrolling */
+.modal-sheet{max-height:calc(100% - env(safe-area-inset-top) - 12px)}
+.modal-close{position:sticky !important;top:0 !important;float:right;margin:-8px -10px 0 8px;width:38px;height:38px;border-radius:50%;background:var(--cream);z-index:6;display:flex;align-items:center;justify-content:center}
+.modal-backdrop.modal-top .modal-close,.modal-backdrop.menu-top .modal-close{top:calc(env(safe-area-inset-top) + 8px) !important}
+/* swipe to delete */
+.timeline{overflow-x:clip}
+.timeline .step-row{transition:transform .22s ease, opacity .18s ease}
+.timeline .step-row.swiping{transition:none}
+.swipe-del{display:none;position:absolute;top:6px;bottom:6px;right:-84px;width:72px;border:none;border-radius:12px;background:#E5484D;color:#fff;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;z-index:3}
+.step-row.swiping .swipe-del,.step-row.swipe-open .swipe-del{display:block}
+.step-row.swipe-gone{opacity:0;transform:translateX(-110%) !important}
+.step-row.chunk-child .swipe-del{top:4px;bottom:4px}
+
+/* mini routine steps: small timeline circles */
+.chunk-children{padding-left:22px}
+.mini-node{position:absolute;left:-35px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;background:var(--surface);border:1.5px solid var(--pale);display:flex;align-items:center;justify-content:center;padding:0;margin:0;font-size:12px;line-height:1;box-sizing:border-box;z-index:2}
+button.mini-node{cursor:pointer}
+.mini-node.checkable::after{content:"";position:absolute;right:-5px;bottom:-5px;width:9px;height:9px;border-radius:50%;background:#fff;border:1.5px solid #D98AA8}
+.mini-node.checkable.on{background:#D77A9A;border-color:#D77A9A}
+.mini-node.checkable.on .emoji{display:none}
+.mini-node.checkable.on::after{display:none}
+.mini-node.checkable.on::before{content:"";width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:translateY(-1px) rotate(45deg)}
+.step-row.chunk-child.step-done .mini-node:not(.checkable){opacity:.5}
+.mini-toggle-row input[type=checkbox]{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:5px;border:1.5px solid #E2B5C6;background:#FDF6F8;margin:0;display:grid;place-content:center}
+.mini-toggle-row input[type=checkbox]:checked{background:#D77A9A;border-color:#D77A9A}
+.mini-toggle-row input[type=checkbox]:checked::before{content:"";width:4px;height:7px;border:solid #fff;border-width:0 1.8px 1.8px 0;transform:translateY(-1px) rotate(45deg)}
+.chunk-child .step-time{font-size:15.5px;width:68px}
 </style>
 </head>
 <body>
@@ -1496,7 +1535,7 @@ window.girlTimeAuth = (function() {
 
   function renderStepRow(row, eventId, interactive, chunkId, relative) {
     var chunkAttr = chunkId ? ' data-chunk="' + chunkId + '"' : '';
-    var labelPrefix = chunkId ? (row.emoji + ' ') : '';
+    var labelPrefix = '';
     var startLabel = relative ? elapsedLabel(row.start) : minutesToClock(row.start);
     var endLabel = relative ? elapsedLabel(row.end) : minutesToClock(row.end);
     var showChecks = interactive && state.settings && state.settings.showCheckboxes;
@@ -1507,8 +1546,13 @@ window.girlTimeAuth = (function() {
       var parentRef = findStepRef(eventId, chunkId, null);
       isDone = !!(parentRef && parentRef.done);
     }
-    if (showChecks && chunkId && miniEach) {
-      labelPrefix = '<button class="inline-check' + (isDone ? ' on' : '') + '" data-em="' + esc(row.emoji) + '" data-action="toggle-done" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + ' role="checkbox" aria-checked="' + (isDone ? 'true' : 'false') + '" aria-label="mark done">' + (isDone ? '' : esc(row.emoji)) + '</button> ';
+    var miniNode = '';
+    if (chunkId) {
+      if (showChecks && miniEach) {
+        miniNode = '<button class="mini-node checkable' + (isDone ? ' on' : '') + '" data-action="toggle-done" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + ' role="checkbox" aria-checked="' + (isDone ? 'true' : 'false') + '" aria-label="mark done"><span class="emoji">' + esc(row.emoji) + '</span></button>';
+      } else {
+        miniNode = '<span class="mini-node"><span class="emoji">' + esc(row.emoji) + '</span></span>';
+      }
     }
     var html = '<div class="step-row' + (chunkId ? ' chunk-child' : '') + (isDone ? ' step-done' : '') + '"' +
       (chunkId ? '' : ' data-emoji="' + esc(row.emoji) + '"') +
@@ -1516,10 +1560,12 @@ window.girlTimeAuth = (function() {
     if (showChecks && !chunkId) {
       html += '  <button class="emoji-check' + (isDone ? ' on' : '') + '" data-action="toggle-done" data-event="' + eventId + '" data-id="' + row.id + '" role="checkbox" aria-checked="' + (isDone ? 'true' : 'false') + '" aria-label="mark done"></button>';
     }
+    html += miniNode;
     html += '  <div class="step-time">' + startLabel + '</div>';
     html += '  <div class="step-info"><div class="step-label">' + labelPrefix + esc(row.label) + '</div>';
     html += '  <div class="step-duration">' + durLong(row.hours, row.minutes) + '</div></div>';
     if (interactive) {
+      html += '  <button class="swipe-del" data-action="swipe-delete" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + '>delete</button>';
       html += '  <div class="step-actions">';
       html += '    <button class="icon-btn" data-action="edit-step" data-event="' + eventId + '" data-id="' + row.id + '"' + chunkAttr + ' title="Edit">&#9998;</button>';
       html += '    <span class="icon-btn drag-handle" title="Drag to reorder">&#9776;</span>';
@@ -1546,6 +1592,7 @@ window.girlTimeAuth = (function() {
     html += '    <div class="step-duration">' + row.children.length + ' step' + (row.children.length === 1 ? '' : 's') + ' · ' + durLong(Math.floor(totalMin / 60), totalMin % 60) + '</div>';
     html += '  </div>';
     if (interactive) {
+      html += '  <button class="swipe-del" data-action="swipe-delete" data-event="' + eventId + '" data-id="' + row.id + '">delete</button>';
       html += '  <div class="step-actions">';
       html += '    <button class="icon-btn delete" data-action="delete-step" data-event="' + eventId + '" data-id="' + row.id + '" title="Remove group">&times;</button>';
       html += '    <span class="icon-btn drag-handle" title="Drag to reorder">&#9776;</span>';
@@ -1678,6 +1725,7 @@ window.girlTimeAuth = (function() {
         catch (e) { console.error('parse step memory failed', e); }
       }
       state.loaded = true;
+      learnStepTimes();
       checkAutoLoad();
       render();
       refreshAllReminders();
@@ -1699,6 +1747,7 @@ window.girlTimeAuth = (function() {
     }).then(function(v) {
       if (v) { try { state.stepMemory = JSON.parse(v) || {}; } catch (e) {} }
       state.loaded = true;
+      learnStepTimes();
       checkAutoLoad();
       render();
       refreshAllReminders();
@@ -1960,7 +2009,7 @@ window.girlTimeAuth = (function() {
     var now = Date.now();
     upcomingOccurrences(3).forEach(function(o) {
       var sched = o.sched;
-      if (!sched.rows.length || o.eventAt <= now || (best && best.eventAt <= o.eventAt)) return;
+      if (!sched.rows.length || o.eventAt + 20 * 60000 <= now || (best && best.eventAt <= o.eventAt)) return;
       var d = o.date;
       var steps = [];
       sched.rows.forEach(function(r) {
@@ -2108,6 +2157,17 @@ window.girlTimeAuth = (function() {
     for (var i = 0; i < 60; i++) { var d = addDays(today, i); if (routineOccursOn(r, d)) return d; }
     return null;
   }
+  // next day this routine still has ahead of it (today counts only if the event hasn't happened yet)
+  function nextUpcoming(r) {
+    var today = ymd(new Date());
+    var d = nextOccurrence(r);
+    if (d !== today) return d;
+    var pe = routineAsEvent(r, today);
+    var sc = computeSchedule(pe.time, pe.steps);
+    if (!sc.valid || dateAtMinutes(today, sc.eventMin).getTime() > Date.now()) return d;
+    for (var i = 1; i < 60; i++) { var n = addDays(today, i); if (routineOccursOn(r, n)) return n; }
+    return null;
+  }
   function whenLabel(dateStr) {
     var today = ymd(new Date());
     if (dateStr === today) return 'today';
@@ -2201,7 +2261,7 @@ window.girlTimeAuth = (function() {
     var now = Date.now();
     var expired = false;
     state.routines.forEach(function(r) {
-      if (r.schedule && r.schedule.type === 'once' && r.schedule.date < today) { delete r.schedule; delete r.skipDates; expired = true; }
+      if (r.schedule && r.schedule.type === 'once' && (r.schedule.date < today || !nextUpcoming(r))) { delete r.schedule; delete r.skipDates; expired = true; }
       else if (r.schedule && r.schedule.type === 'repeat' && r.schedule.end && !nextOccurrence(r)) { delete r.schedule; delete r.skipDates; expired = true; }
     });
     if (expired) saveRoutines();
@@ -2675,8 +2735,7 @@ window.girlTimeAuth = (function() {
     { target: '.add-step-card', kind: 'add', fill: ['drive', 0, 20], text: function() { return 'now add your steps, starting with what happens right before the event. tap “+ add step” to add the drive'; } },
     { target: '.add-step-card', kind: 'add', fill: ['shower', 0, 30], text: function() { return 'keep working backward. tap “+ add step” to add a shower before the drive'; } },
     { target: '.startby', text: function() { return 'girl time works backward from 7:00 PM, so you should start getting ready at ' + tourStartTime() + ' ✨'; } },
-    { target: '.step-row .step-actions', text: function() { return 'tap ✎ to edit a step, or hold and drag ☰ to rearrange'; } },
-    { target: '[data-action="open-save"]', text: function() { return 'save this as a routine, or as a mini routine: a set of steps (like shower + hair) you can drop into any plan'; } },
+    { target: '[data-action="open-save"]', text: function() { return 'save this as a routine, or as a mini routine: a group of steps (like shower + hair) you can drop into any plan'; } },
     { target: '.routines-link', text: function() { return 'plans you do again live here: full routines, mini routines and what’s upcoming'; } },
     { target: '[data-action="open-schedule"]', text: function() { return isNativeApp() ? 'schedule it for a day or have it repeat. it loads itself and sends you a notification when it’s time to start' : 'schedule it for a day or have it repeat. it loads itself on the day, ready to go'; } },
     { target: '.menu-circle', text: function() { return 'turn on checkboxes in settings, and replay this tutorial any time from the menu'; } },
@@ -2917,7 +2976,7 @@ window.girlTimeAuth = (function() {
     html += '  <div><div class="wordmark-row"><h1 class="wordmark">girl <span>time</span></h1></div>';
     html += '  </div>';
     html += '  <div class="header-links">';
-    html += '    <button class="menu-circle" data-action="open-menu" aria-label="menu">&#9776;</button>';
+    html += '    <button class="menu-circle" data-action="open-menu" aria-label="menu"><span class="menu-bars"></span></button>';
     html += '  </div>';
     html += '</div>';
 
@@ -3047,6 +3106,7 @@ window.girlTimeAuth = (function() {
     }
     html += '<div class="app-footer">';
     html += '  <div><span class="emoji">&#127800;</span> created by Marina in sept 2026</div>';
+    html += '  <div>last updated: nov 2026</div>';
     html += '  <div><a href="privacy.html" style="color:inherit;text-decoration:underline;">privacy policy</a></div>';
     html += '</div>';
 
@@ -3103,7 +3163,7 @@ window.girlTimeAuth = (function() {
       emptyMsg = 'No mini routines saved yet. Save one with "save as mini routine" to reuse it as a group here.';
     } else {
       html += '<div class="modal-title">saved routines</div>';
-      var nSched = state.routines.filter(function(r) { return r.schedule && !r.isMini; }).length;
+      var nSched = state.routines.filter(function(r) { return r.schedule && !r.isMini && nextUpcoming(r); }).length;
       var tab = state.routinesTab || (nSched ? 'upcoming' : 'routines');
       var nMini = state.routines.filter(function(r) { return r.isMini; }).length;
       var nRoutines = state.routines.length - nMini;
@@ -3113,8 +3173,8 @@ window.girlTimeAuth = (function() {
       html += '  <button class="routines-tab' + (tab === 'mini' ? ' active' : '') + '" data-action="switch-routines-tab" data-id="mini">mini <span class="tab-count">' + nMini + '</span></button>';
       html += '</div>';
       if (tab === 'upcoming') {
-        list = state.routines.filter(function(r) { return r.schedule && !r.isMini; });
-        list.forEach(function(r) { nextMap[r.id] = nextOccurrence(r); });
+        list = state.routines.filter(function(r) { return r.schedule && !r.isMini && nextUpcoming(r); });
+        list.forEach(function(r) { nextMap[r.id] = nextUpcoming(r); });
         list.sort(function(a, b) { return (nextMap[a.id] || '9999') < (nextMap[b.id] || '9999') ? -1 : 1; });
       } else {
         list = state.routines.filter(function(r) { return tab === 'mini' ? r.isMini : !r.isMini; });
@@ -3267,7 +3327,7 @@ window.girlTimeAuth = (function() {
     html += '<ol class="howto-list">';
     html += '  <li>Set an event name and time</li>';
     html += '  <li>Add the steps you need before it - start with whatever comes right before the event, then work backward (you can always drag to reorder)</li>';
-    html += '  <li>Save steps you reuse (like shower + hair) as a mini routine, then drop them into any event</li>';
+    html += '  <li>Save a group of steps you reuse (like shower + hair) as a mini routine, then drop it into any event</li>';
     html += '  <li>Tap "schedule" to set it for a certain day or to repeat (like school on weekdays) - it loads itself that day and reminds you when it&#39;s time to start your routine</li>';
     if (isNativeApp()) html += '  <li>Add the girl time widget to your lock screen to see your start time and steps at a glance (press and hold your lock screen, then tap customize)</li>';
     html += '</ol>';
@@ -3278,7 +3338,7 @@ window.girlTimeAuth = (function() {
     html += '<div class="example-caption">a 7:00 PM dinner means starting to get ready at ' + minutesToClock(exSched.startOverall) + '</div>';
     html += '<div class="howto-kinds"><div class="howto-kinds-title">your saved routines, explained</div>';
     html += '<div class="howto-kind"><span class="howto-kind-name">routine</span>a whole plan: event name, time, steps and notes. load it any time to plan the same thing again</div>';
-    html += '<div class="howto-kind"><span class="howto-kind-name">mini routine</span>a reusable set of steps with no time, like your shower + hair routine. drop it into any plan as one group</div>';
+    html += '<div class="howto-kind"><span class="howto-kind-name">mini routine</span>a reusable group of steps with no time, like your shower + hair routine. drop the whole group into any plan</div>';
     html += '<div class="howto-kind"><span class="howto-kind-name">upcoming</span>routines you&#39;ve scheduled for a day (like friday&#39;s party) or set to repeat (like school on weekdays). they load themselves on the day</div>';
     html += '</div>';
     html += '</div></div>';
@@ -3357,21 +3417,47 @@ window.girlTimeAuth = (function() {
     }
   }
 
+  // Fill in step lengths learned from steps you've used before (no extra button needed).
+  function learnStepTimes() {
+    if (!state.stepMemory) state.stepMemory = {};
+    var changed = false;
+    function learn(st) {
+      if (!st || !st.label || (!st.hours && !st.minutes)) return;
+      var k = normalizeLabel(st.label);
+      if (k && !state.stepMemory[k]) { state.stepMemory[k] = { hours: st.hours || 0, minutes: st.minutes || 0 }; changed = true; }
+    }
+    function walk(steps) { (steps || []).forEach(function(st) { if (st.children) walk(st.children); else learn(st); }); }
+    (state.routines || []).forEach(function(r) { walk(r.steps); });
+    (state.events || []).forEach(function(ev) { walk(ev.steps); });
+    if (changed) saveStepMemory();
+  }
+
   function wireStepHint(labelEl, hoursEl, minutesEl, hintEl) {
     if (!labelEl || !hintEl) return;
+    var isEdit = labelEl.id === 'editStepLabel';
+    function userTyped() { this.dataset.auto = ''; }
+    if (hoursEl) hoursEl.addEventListener('input', userTyped);
+    if (minutesEl) minutesEl.addEventListener('input', userTyped);
+    function isAuto(el) { return el && (el.dataset.auto === '1' || !el.value || el.value === '0'); }
     labelEl.addEventListener('input', function(e) {
       var mem = state.stepMemory[normalizeLabel(e.target.value)];
       if (mem && (mem.hours || mem.minutes)) {
+        if (!isEdit && isAuto(hoursEl) && isAuto(minutesEl)) {
+          if (hoursEl) { hoursEl.value = mem.hours ? mem.hours : ''; hoursEl.dataset.auto = '1'; }
+          if (minutesEl) { minutesEl.value = mem.minutes ? mem.minutes : ''; minutesEl.dataset.auto = '1'; }
+          hintEl.textContent = '✨ usually ' + durLong(mem.hours, mem.minutes) + ', filled in for you';
+          hintEl.onclick = null;
+        } else {
+          hintEl.textContent = '💡 usually ' + durLong(mem.hours, mem.minutes) + ' - tap to use';
+          hintEl.onclick = function() {
+            if (hoursEl) hoursEl.value = mem.hours || '';
+            if (minutesEl) minutesEl.value = mem.minutes || '';
+          };
+        }
         hintEl.style.display = 'inline-block';
-        hintEl.textContent = '💡 usually ' + durLabel(mem.hours, mem.minutes) + ' - tap to use';
-        hintEl.onclick = function() {
-          if (hoursEl) hoursEl.value = mem.hours || '';
-          if (minutesEl) minutesEl.value = mem.minutes || '';
-          var card = labelEl.closest('.add-step-card');
-          var addBtn = card && card.querySelector('[data-action="add-step"]');
-          if (addBtn && !addBtn.disabled) addBtn.click();
-        };
       } else {
+        if (hoursEl && hoursEl.dataset.auto === '1') { hoursEl.value = ''; hoursEl.dataset.auto = ''; }
+        if (minutesEl && minutesEl.dataset.auto === '1') { minutesEl.value = ''; minutesEl.dataset.auto = ''; }
         hintEl.style.display = 'none';
       }
     });
@@ -3401,6 +3487,10 @@ window.girlTimeAuth = (function() {
         recordStepMemory(rLabel, rHours, rMinutes);
         showToast('Remembered "' + rLabel.trim() + '" → ' + durLabel(rHours, rMinutes));
       }
+    } else if (action === 'swipe-delete') {
+      var delRow = btn.closest('.step-row');
+      if (delRow) delRow.classList.add('swipe-gone');
+      setTimeout(function() { deleteStep(eventId, id, chunkId); showToast('Step deleted - tap undo to bring it back', 2600); }, 180);
     } else if (action === 'delete-step') {
       deleteStep(eventId, id, chunkId);
     } else if (action === 'edit-step') {
@@ -3927,12 +4017,59 @@ window.girlTimeAuth = (function() {
     document.documentElement.style.textSizeAdjust = pct + '%';
   }
 
+  // swipe a step to the left to show a red delete square
+  var SWIPE_W = 84;
+  function closeSwipes(except) {
+    document.querySelectorAll('.step-row.swipe-open').forEach(function(r) {
+      if (r !== except) { r.classList.remove('swipe-open'); r.style.transform = ''; }
+    });
+  }
+  function initSwipeDelete(app) {
+    var sw = null;
+    app.addEventListener('touchstart', function(e) {
+      if (state.tour || state.modal || e.touches.length !== 1) return;
+      var t = e.target;
+      var row = t.closest && t.closest('.timeline .step-row');
+      if (!row || t.closest('.drag-handle') || t.closest('.swipe-del') || !row.querySelector('.swipe-del')) { if (!t.closest || !t.closest('.swipe-del')) closeSwipes(); return; }
+      closeSwipes(row);
+      sw = { row: row, x: e.touches[0].clientX, y: e.touches[0].clientY, base: row.classList.contains('swipe-open') ? -SWIPE_W : 0, mode: null };
+    }, { passive: true });
+    app.addEventListener('touchmove', function(e) {
+      if (!sw) return;
+      var dx = e.touches[0].clientX - sw.x, dy = e.touches[0].clientY - sw.y;
+      if (!sw.mode) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        sw.mode = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+        if (sw.mode === 'x') sw.row.classList.add('swiping');
+      }
+      if (sw.mode !== 'x') return;
+      e.preventDefault();
+      var x = Math.max(-SWIPE_W - 24, Math.min(0, sw.base + dx));
+      sw.row.style.transform = 'translateX(' + x + 'px)';
+      sw.cur = x;
+    }, { passive: false });
+    function end() {
+      if (!sw) return;
+      var row = sw.row;
+      row.classList.remove('swiping');
+      if (sw.mode === 'x') {
+        var open = (sw.cur !== undefined ? sw.cur : sw.base) < -SWIPE_W / 2;
+        row.classList.toggle('swipe-open', open);
+        row.style.transform = open ? 'translateX(' + (-SWIPE_W) + 'px)' : '';
+      }
+      sw = null;
+    }
+    app.addEventListener('touchend', end);
+    app.addEventListener('touchcancel', end);
+  }
+
   function init() {
     applySystemTextSize();
     document.addEventListener('visibilitychange', function() { if (!document.hidden) applySystemTextSize(); });
     var app = document.getElementById('app');
     app.addEventListener('click', onClick);
     app.addEventListener('pointerdown', onDragStart);
+    initSwipeDelete(app);
     render();
     if (window.girlTimeAuth) {
       window.girlTimeAuth.onChange(handleAuthChange);

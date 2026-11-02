@@ -1058,6 +1058,14 @@ body::before{background:#F9EEEE}
 /* bigger wordmark, same layout: keep the header row its old height */
 .wordmark{font-size:32.2px;line-height:1.15}
 #app{padding-bottom:max(12px, env(safe-area-inset-bottom, 0px))}
+
+/* edit step: emoji box beside the label */
+.emoji-label-row{display:flex;gap:10px;align-items:flex-end}
+.emoji-field{flex:0 0 58px}
+.label-field{flex:1;min-width:0}
+.emoji-input{width:58px;text-align:center;font-size:22px !important;padding:4px 0 !important;font-family:-apple-system,'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif !important;caret-color:transparent}
+.emoji-input::placeholder{opacity:.45}
+.emoji-tip{font-size:12.5px;color:var(--ink-soft);margin-top:6px}
 </style>
 </head>
 <body>
@@ -1461,6 +1469,19 @@ window.girlTimeAuth = (function() {
     return false;
   }
 
+  function firstEmoji(str) {
+    str = String(str || '');
+    var parts = [];
+    try {
+      if (window.Intl && Intl.Segmenter) parts = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(str), function(x) { return x.segment; });
+      else parts = Array.from(str);
+    } catch (e) { parts = Array.from(str); }
+    var isEmoji;
+    try { isEmoji = new RegExp('\\p{Extended_Pictographic}|\\p{Regional_Indicator}', 'u'); } catch (e) { isEmoji = /[\u2190-\u2BFF\uD83C-\uDBFF]/; }
+    for (var i = 0; i < parts.length; i++) if (isEmoji.test(parts[i])) return parts[i];
+    return '';
+  }
+
   function guessStepEmoji(label) {
     if (!label) return DEFAULT_STEP_EMOJI;
     var lower = label.toLowerCase();
@@ -1507,12 +1528,12 @@ window.girlTimeAuth = (function() {
           var cdur = (c.hours || 0) * 60 + (c.minutes || 0);
           var cEnd = childCursor;
           var cStart = childCursor - cdur;
-          childRows[j] = { id: c.id, label: c.label, hours: c.hours, minutes: c.minutes, start: cStart, end: cEnd, emoji: guessStepEmoji(c.label) };
+          childRows[j] = { id: c.id, label: c.label, hours: c.hours, minutes: c.minutes, start: cStart, end: cEnd, emoji: c.emoji || guessStepEmoji(c.label) };
           childCursor = cStart;
         }
         rows[i] = { id: s.id, kind: 'chunk', name: s.name, collapsed: !!s.collapsed, start: start, end: end, children: childRows };
       } else {
-        rows[i] = { id: s.id || ('ex' + i), label: s.label, hours: s.hours, minutes: s.minutes, start: start, end: end, emoji: guessStepEmoji(s.label) };
+        rows[i] = { id: s.id || ('ex' + i), label: s.label, hours: s.hours, minutes: s.minutes, start: start, end: end, emoji: s.emoji || guessStepEmoji(s.label) };
       }
       cursor = start;
     }
@@ -1528,7 +1549,7 @@ window.girlTimeAuth = (function() {
         var childCursor = cursor;
         var children = s.children.map(function(c) {
           var dur = (c.hours || 0) * 60 + (c.minutes || 0);
-          var row = { id: c.id, label: c.label, hours: c.hours, minutes: c.minutes, start: childCursor, end: childCursor + dur, emoji: guessStepEmoji(c.label) };
+          var row = { id: c.id, label: c.label, hours: c.hours, minutes: c.minutes, start: childCursor, end: childCursor + dur, emoji: c.emoji || guessStepEmoji(c.label) };
           childCursor += dur;
           return row;
         });
@@ -1538,7 +1559,7 @@ window.girlTimeAuth = (function() {
         return row;
       }
       var dur = (s.hours || 0) * 60 + (s.minutes || 0);
-      var row = { id: s.id, label: s.label, hours: s.hours, minutes: s.minutes, start: cursor, end: cursor + dur, emoji: guessStepEmoji(s.label) };
+      var row = { id: s.id, label: s.label, hours: s.hours, minutes: s.minutes, start: cursor, end: cursor + dur, emoji: s.emoji || guessStepEmoji(s.label) };
       cursor += dur;
       return row;
     });
@@ -1716,11 +1737,11 @@ window.girlTimeAuth = (function() {
                 done: !!s.done,
                 collapsed: s.collapsed !== false,
                 children: (s.children || []).map(function(c) {
-                  return { id: c.id || uid(), label: c.label, hours: c.hours || 0, minutes: c.minutes || 0, done: !!c.done, notify: !!c.notify };
+                  return { id: c.id || uid(), label: c.label, hours: c.hours || 0, minutes: c.minutes || 0, done: !!c.done, notify: !!c.notify, emoji: c.emoji || undefined };
                 })
               };
             }
-            return { id: s.id || uid(), label: s.label, hours: s.hours || 0, minutes: s.minutes || 0, done: !!s.done, notify: !!s.notify };
+            return { id: s.id || uid(), label: s.label, hours: s.hours || 0, minutes: s.minutes || 0, done: !!s.done, notify: !!s.notify, emoji: s.emoji || undefined };
           })
         };
       });
@@ -1884,7 +1905,7 @@ window.girlTimeAuth = (function() {
     render();
   }
 
-  function editStep(eventId, stepId, label, hours, minutes, chunkId) {
+  function editStep(eventId, stepId, label, hours, minutes, chunkId, emoji) {
     var ev = findEvent(eventId);
     if (!ev) return;
     if (!label.trim()) return;
@@ -1901,6 +1922,7 @@ window.girlTimeAuth = (function() {
     step.label = label.trim();
     step.hours = hours || 0;
     step.minutes = minutes || 0;
+    if (emoji !== undefined) { if (emoji) step.emoji = emoji; else delete step.emoji; }
     recordStepMemory(step.label, step.hours, step.minutes);
     state.modal = null;
     debounceSaveSession();
@@ -2210,8 +2232,8 @@ window.girlTimeAuth = (function() {
       note: r.note || '',
       steps: (r.steps || []).map(function(st, i) {
         if (isChunk(st)) return { id: 'r' + i, kind: 'chunk', name: st.name, note: st.note || '', collapsed: true,
-          children: (st.children || []).map(function(c, j) { return { id: 'r' + i + '_' + j, label: c.label, hours: c.hours, minutes: c.minutes, notify: !!c.notify }; }) };
-        return { id: 'r' + i, label: st.label, hours: st.hours, minutes: st.minutes, notify: !!st.notify };
+          children: (st.children || []).map(function(c, j) { return { id: 'r' + i + '_' + j, label: c.label, hours: c.hours, minutes: c.minutes, notify: !!c.notify, emoji: c.emoji || undefined }; }) };
+        return { id: 'r' + i, label: st.label, hours: st.hours, minutes: st.minutes, notify: !!st.notify, emoji: st.emoji || undefined };
       })
     };
   }
@@ -2252,16 +2274,16 @@ window.girlTimeAuth = (function() {
   // Saved routines keep mini routines as groups: { kind: 'chunk', name, note, children: [...] }
   function savedStepFromEvent(st) {
     if (isChunk(st)) {
-      return { kind: 'chunk', name: st.name, note: st.note || '', children: (st.children || []).map(function(c) { return { label: c.label, hours: c.hours, minutes: c.minutes, notify: !!c.notify }; }) };
+      return { kind: 'chunk', name: st.name, note: st.note || '', children: (st.children || []).map(function(c) { return { label: c.label, hours: c.hours, minutes: c.minutes, notify: !!c.notify, emoji: c.emoji || undefined }; }) };
     }
-    return { label: st.label, hours: st.hours, minutes: st.minutes, notify: !!st.notify };
+    return { label: st.label, hours: st.hours, minutes: st.minutes, notify: !!st.notify, emoji: st.emoji || undefined };
   }
   function eventStepFromSaved(st) {
     if (isChunk(st)) {
       return { id: uid(), kind: 'chunk', name: st.name, note: st.note || '', collapsed: true,
-        children: (st.children || []).map(function(c) { return { id: uid(), label: c.label, hours: c.hours, minutes: c.minutes, notify: !!c.notify }; }) };
+        children: (st.children || []).map(function(c) { return { id: uid(), label: c.label, hours: c.hours, minutes: c.minutes, notify: !!c.notify, emoji: c.emoji || undefined }; }) };
     }
-    return { id: uid(), label: st.label, hours: st.hours, minutes: st.minutes, notify: !!st.notify };
+    return { id: uid(), label: st.label, hours: st.hours, minutes: st.minutes, notify: !!st.notify, emoji: st.emoji || undefined };
   }
   function flatRoutineSteps(steps) {
     var out = [];
@@ -2271,7 +2293,7 @@ window.girlTimeAuth = (function() {
   function flattenEventSteps(ev) {
     var flat = [];
     (ev.steps || []).forEach(function(st) {
-      (isChunk(st) ? st.children : [st]).forEach(function(c) { flat.push({ label: c.label, hours: c.hours, minutes: c.minutes, notify: !!c.notify }); });
+      (isChunk(st) ? st.children : [st]).forEach(function(c) { flat.push({ label: c.label, hours: c.hours, minutes: c.minutes, notify: !!c.notify, emoji: c.emoji || undefined }); });
     });
     return flat;
   }
@@ -2745,7 +2767,7 @@ window.girlTimeAuth = (function() {
       name: r.name,
       note: r.note || '',
       collapsed: true,
-      children: flatRoutineSteps(r.steps).map(function(s) { return { id: uid(), label: s.label, hours: s.hours, minutes: s.minutes }; })
+      children: flatRoutineSteps(r.steps).map(function(s) { return { id: uid(), label: s.label, hours: s.hours, minutes: s.minutes, emoji: s.emoji || undefined }; })
     };
     ev.steps.unshift(chunk);
     state.modal = null;
@@ -3278,8 +3300,10 @@ window.girlTimeAuth = (function() {
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">edit step</div>';
     html += '<div class="add-step-row1">';
-    html += '  <label class="field-label" for="editStepLabel">label</label>';
-    html += '  <input type="text" id="editStepLabel" value="' + esc(step.label) + '">';
+    html += '  <div class="emoji-label-row">';
+    html += '    <div class="emoji-field"><label class="field-label" for="editStepEmoji">emoji</label><input type="text" id="editStepEmoji" class="emoji-input" autocomplete="off" value="' + esc(step.emoji || '') + '" placeholder="' + esc(guessStepEmoji(step.label)) + '" aria-label="emoji"></div>';
+    html += '    <div class="label-field"><label class="field-label" for="editStepLabel">label</label><input type="text" id="editStepLabel" value="' + esc(step.label) + '"></div>';
+    html += '  </div>';
     html += '  <div class="step-hint" id="editStepHint" style="display:none;"></div>';
     html += '</div>';
     html += '<div class="add-step-row2">';
@@ -3463,6 +3487,18 @@ window.girlTimeAuth = (function() {
     }
 
     var editLabelEl = document.getElementById('editStepLabel');
+    var editEmojiEl = document.getElementById('editStepEmoji');
+    if (editEmojiEl) {
+      editEmojiEl.addEventListener('input', function() {
+        var v = editEmojiEl.value;
+        // the newest emoji typed wins
+        var segs = []; try { segs = Intl.Segmenter ? Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(v), function(x) { return x.segment; }) : Array.from(v); } catch (e) { segs = Array.from(v); }
+        var pick = '';
+        for (var i = segs.length - 1; i >= 0; i--) { if (firstEmoji(segs[i])) { pick = segs[i]; break; } }
+        if (editEmojiEl.value !== pick) editEmojiEl.value = pick;
+      });
+      if (editLabelEl) editLabelEl.addEventListener('input', function() { editEmojiEl.placeholder = guessStepEmoji(editLabelEl.value); });
+    }
 
     var emailInputEl = document.getElementById('emailInput');
     if (emailInputEl) {
@@ -3582,7 +3618,8 @@ window.girlTimeAuth = (function() {
       var nOn = nsw ? nsw.classList.contains('on') : null;
       var srB = findStepRef(eventId, id, chunkId);
       if (srB && nOn !== null) srB.notify = nOn;
-      editStep(eventId, id, editLabel, editHours, editMinutes, chunkId);
+      var emEl = document.getElementById('editStepEmoji');
+      editStep(eventId, id, editLabel, editHours, editMinutes, chunkId, emEl ? firstEmoji(emEl.value) : undefined);
       var srA = findStepRef(eventId, id, chunkId);
       if (srA && nOn !== null && srA.notify !== nOn) { srA.notify = nOn; debounceSaveSession(); }
     } else if (action === 'delete-step-from-modal') {

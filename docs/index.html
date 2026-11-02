@@ -3516,15 +3516,19 @@ window.girlTimeAuth = (function() {
         if (!isEdit && isAuto(hoursEl) && isAuto(minutesEl)) {
           if (hoursEl) { hoursEl.value = mem.hours ? mem.hours : ''; hoursEl.dataset.auto = '1'; }
           if (minutesEl) { minutesEl.value = mem.minutes ? mem.minutes : ''; minutesEl.dataset.auto = '1'; }
-          hintEl.textContent = '✨ usually ' + durLong(mem.hours, mem.minutes) + ', filled in for you';
-          hintEl.onclick = null;
+          hintEl.textContent = '✨ usually ' + durLong(mem.hours, mem.minutes);
         } else {
           hintEl.textContent = '💡 usually ' + durLong(mem.hours, mem.minutes) + ' - tap to use';
-          hintEl.onclick = function() {
-            if (hoursEl) hoursEl.value = mem.hours || '';
-            if (minutesEl) minutesEl.value = mem.minutes || '';
-          };
         }
+        // tapping the hint uses the usual time and adds the step right away
+        hintEl.onclick = function() {
+          if (hoursEl) hoursEl.value = mem.hours || '';
+          if (minutesEl) minutesEl.value = mem.minutes || '';
+          if (isEdit) return;
+          var card = labelEl.closest('.add-step-card');
+          var addBtn = card && card.querySelector('[data-action="add-step"]');
+          if (addBtn && !addBtn.disabled) addBtn.click();
+        };
         hintEl.style.display = 'inline-block';
       } else {
         if (hoursEl && hoursEl.dataset.auto === '1') { hoursEl.value = ''; hoursEl.dataset.auto = ''; }

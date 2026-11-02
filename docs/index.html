@@ -1050,11 +1050,11 @@ body::before{background:#F9EEEE}
 .plan-actions{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 14px 14px;margin-bottom:12px}
 .plan-actions .primary-btn.ghost{margin-top:8px}
 .plan-actions .primary-btn.ghost:first-child{margin-top:0}
-/* save / calendar / schedule as three white tiles in a row */
-.plan-actions{display:flex;gap:10px;background:none;box-shadow:none;padding:0;margin:0 0 12px}
-.plan-actions .primary-btn.ghost{flex:1;margin:0 !important;background:#fff;border:none;border-radius:16px;box-shadow:var(--shadow);padding:16px 6px;font-size:14.5px;color:var(--berry);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.25}
-.plan-actions .primary-btn.ghost.rem-set{background:#fff;color:var(--rose-deep)}
-.plan-actions .tile-sub{display:block;font-size:11.5px;font-weight:600;color:var(--ink-soft);margin-top:3px}
+/* save / calendar / schedule as soft pink pills (no card) */
+.plan-actions{background:none;box-shadow:none;padding:0;margin:0 0 12px}
+.plan-actions .primary-btn.ghost{background:#FBE3EB;border:none;border-radius:999px;color:var(--berry);padding:12px 16px}
+.plan-actions .primary-btn.ghost:active{background:#F7D3E0}
+.plan-actions .primary-btn.ghost.rem-set{background:#F7D3E0}
 </style>
 </head>
 <body>
@@ -3131,17 +3131,17 @@ window.girlTimeAuth = (function() {
         html += '<textarea id="eventNote-' + ev.id + '" class="event-note" rows="2" placeholder="e.g. bring skates + jacket, venmo grace">' + esc(ev.note || '') + '</textarea></div>';
       }
       html += '<div class="plan-actions">';
-      html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '">save</button>';
+      html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '">save this ' + (ev.isMiniMode ? 'mini routine' : 'routine') + '</button>';
       if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
-        html += '<button class="primary-btn ghost" data-action="open-calendar" data-event="' + ev.id + '">calendar</button>';
+        html += '<button class="primary-btn ghost" data-action="open-calendar" data-event="' + ev.id + '" style="margin-top:8px;">add to calendar</button>';
       }
       if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
         var linkedR = ev.routineId ? state.routines.find(function(x) { return x.id === ev.routineId && !x.isMini; }) : null;
-        var schedLbl = 'schedule';
+        var schedLbl = isNativeApp() ? 'schedule &amp; reminders' : 'schedule';
         var isSet = !!(linkedR && linkedR.schedule) || !!ev.reminder;
-        if (linkedR && linkedR.schedule) schedLbl = 'scheduled<span class="tile-sub">' + esc(scheduleLabel(linkedR).replace(/^[^a-z0-9]+/i, '')) + '</span>';
-        else if (ev.reminder) schedLbl = 'reminders on<span class="tile-sub">' + calLabel(ev.reminder.date).split(',')[0] + '</span>';
-        html += '<button class="primary-btn ghost' + (isSet ? ' rem-set' : '') + '" data-action="open-schedule" data-event="' + ev.id + '">' + schedLbl + '</button>';
+        if (linkedR && linkedR.schedule) schedLbl = esc(scheduleLabel(linkedR)) + ' &middot; edit';
+        else if (ev.reminder) schedLbl = '&#128276; reminders set &middot; ' + calLabel(ev.reminder.date).split(',')[0];
+        html += '<button class="primary-btn ghost' + (isSet ? ' rem-set' : '') + '" data-action="open-schedule" data-event="' + ev.id + '" style="margin-top:8px;">' + schedLbl + '</button>';
       }
       html += '</div>'; // .plan-actions
 

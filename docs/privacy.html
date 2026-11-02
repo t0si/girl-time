@@ -38,6 +38,14 @@
 <style>
 .pp-close{position:fixed;top:max(12px, calc(env(safe-area-inset-top) + 10px));right:16px;width:40px;height:40px;border-radius:50%;background:#fff;border:1.5px solid #F0D2DC;color:#9A8A90;font-size:24px;line-height:37px;text-align:center;text-decoration:none;box-shadow:0 2px 8px rgba(94,42,69,.12);z-index:1000}
 </style>
+<style>
+/* match the app: even pink, status bar covered, close button never over the title */
+html,body{background:#F9EEEE !important}
+body{padding-top:calc(env(safe-area-inset-top) + 28px) !important;-webkit-user-select:none;user-select:none}
+body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:#F9EEEE;z-index:999}
+h1{padding-right:52px;font-size:28px;line-height:1.2;margin-top:0}
+.pp-close{top:calc(env(safe-area-inset-top) + 12px) !important;right:12px !important;width:38px !important;height:38px !important;background:#F9EEEE !important;border:none !important;box-shadow:none !important;color:#8C7784 !important;font-size:22px !important;line-height:38px !important}
+</style>
 </head>
 <body>
 <a href="index.html" class="pp-close" aria-label="close" onclick="if (history.length > 1) { history.back(); return false; }">&times;</a>

@@ -1007,7 +1007,7 @@ body:has(.modal-backdrop.modal-top)::before,body:has(.modal-backdrop.menu-top)::
 /* every sheet: never taller than the space below the status bar, close button stays put while scrolling */
 .modal-sheet{max-height:calc(100% - env(safe-area-inset-top) - 12px)}
 .modal-close{position:sticky !important;top:0 !important;float:right;margin:-8px -10px 0 8px;width:38px;height:38px;border-radius:50%;background:var(--cream);z-index:6;display:flex;align-items:center;justify-content:center}
-.modal-backdrop.modal-top .modal-close,.modal-backdrop.menu-top .modal-close{top:calc(env(safe-area-inset-top) + 8px) !important}
+.modal-backdrop.modal-top .modal-close,.modal-backdrop.menu-top .modal-close{position:fixed !important;top:calc(env(safe-area-inset-top) + 12px) !important;right:max(12px, calc((100vw - 460px) / 2 + 12px));float:none;margin:0}
 /* swipe to delete */
 .timeline{overflow-x:clip}
 .timeline .step-row{transition:transform .22s ease, opacity .18s ease}
@@ -1033,6 +1033,15 @@ button.mini-node{cursor:pointer}
 .chunk-child .step-time{font-size:15.5px;width:68px}
 .event-card-header{margin-bottom:14px}
 .event-card{margin-bottom:16px}
+/* one even light pink background everywhere (matches the top) */
+html,body{background:#F9EEEE !important;background-image:none !important}
+body::before{background:#F9EEEE}
+.checks-row{display:flex;justify-content:space-between;align-items:center;margin:8px 0 4px;min-height:24px}
+.checks-left{display:flex;align-items:center;gap:5px;padding-left:2px}
+.checks-row .clear-checks-btn{margin:0;padding:0;color:var(--ink-soft);text-underline-offset:2px}
+.checks-row .checks-dot{color:var(--ink-soft)}
+.checks-row .add-note-link{margin:0;font-size:14px}
+.note-editor{margin:6px 0 4px}
 </style>
 </head>
 <body>
@@ -1581,9 +1590,10 @@ window.girlTimeAuth = (function() {
     var totalMin = row.children.reduce(function(sum, c) { return sum + (c.hours || 0) * 60 + (c.minutes || 0); }, 0);
     var startLabel = relative ? elapsedLabel(row.start) : minutesToClock(row.start);
     var endLabel = relative ? elapsedLabel(row.end) : minutesToClock(row.end);
-    var chunkChecks = interactive && state.settings && state.settings.showCheckboxes && !state.settings.checkMiniSteps;
+    var chunkChecks = interactive && state.settings && state.settings.showCheckboxes;
     var chunkRef = chunkChecks ? findStepRef(eventId, row.id, null) : null;
     var chunkDone = !!(chunkRef && chunkRef.done);
+    if (chunkRef && state.settings.checkMiniSteps) chunkDone = !!(chunkRef.children && chunkRef.children.length && chunkRef.children.every(function(c) { return c.done; }));
     var html = '<div class="step-row chunk-header' + (chunkDone ? ' step-done' : '') + '" data-emoji="&#127872;" data-event="' + eventId + '" data-id="' + row.id + '">';
     if (chunkChecks) {
       html += '  <button class="emoji-check' + (chunkDone ? ' on' : '') + '" data-action="toggle-done" data-event="' + eventId + '" data-id="' + row.id + '" role="checkbox" aria-checked="' + (chunkDone ? 'true' : 'false') + '" aria-label="mark mini routine done"></button>';
@@ -3050,12 +3060,6 @@ window.girlTimeAuth = (function() {
       html += '    <input type="checkbox" id="isMini-' + ev.id + '" data-event="' + ev.id + '"' + (ev.isMiniMode ? ' checked' : '') + '>';
       html += '    <span>this is a mini routine <span class="mini-toggle-hint">(no time needed)</span></span>';
       html += '  </label>';
-      if ((ev.note && ev.note.length) || (state.noteOpen && state.noteOpen[ev.id])) {
-        html += '  <label class="field-label" for="eventNote-' + ev.id + '" style="margin-top:14px;">&#128221; notes</label>';
-        html += '  <textarea id="eventNote-' + ev.id + '" class="event-note" rows="2" placeholder="e.g. bring skates + jacket, venmo grace">' + esc(ev.note || '') + '</textarea>';
-      } else {
-        html += '  <button class="add-note-link" data-action="open-note" data-event="' + ev.id + '">+ add a note</button>';
-      }
       html += '</div>';
 
       html += '<div class="add-step-card">';
@@ -3099,8 +3103,19 @@ window.girlTimeAuth = (function() {
         html += '<div class="empty-msg">Set an event time above to start building this schedule.</div>';
       }
 
+      // one row under the timeline: check / uncheck all on the left, note on the right
+      var noteOpenNow = !!(state.noteOpen && state.noteOpen[ev.id]);
+      html += '<div class="checks-row">';
       if (state.settings && state.settings.showCheckboxes && ev.steps.length) {
-        html += '<div class="checks-row"><button class="clear-checks-btn" data-action="check-all" data-event="' + ev.id + '">check all</button><span class="checks-dot">&middot;</span><button class="clear-checks-btn" data-action="clear-checks" data-event="' + ev.id + '">uncheck all</button></div>';
+        html += '<span class="checks-left"><button class="clear-checks-btn" data-action="check-all" data-event="' + ev.id + '">check</button><span class="checks-dot">/</span><button class="clear-checks-btn" data-action="clear-checks" data-event="' + ev.id + '">uncheck</button><span class="checks-dot">all</span></span>';
+      } else {
+        html += '<span></span>';
+      }
+      if (!noteOpenNow) html += '<button class="add-note-link" data-action="open-note" data-event="' + ev.id + '">' + (ev.note && ev.note.trim() ? 'edit note' : '+ add a note') + '</button>';
+      html += '</div>';
+      if (noteOpenNow) {
+        html += '<div class="note-editor"><label class="field-label" for="eventNote-' + ev.id + '">&#128221; notes</label>';
+        html += '<textarea id="eventNote-' + ev.id + '" class="event-note" rows="2" placeholder="e.g. bring skates + jacket, venmo grace">' + esc(ev.note || '') + '</textarea></div>';
       }
       html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '" style="margin-top:6px;">save this ' + (ev.isMiniMode ? 'mini routine' : 'routine') + '</button>';
       if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
@@ -3379,7 +3394,9 @@ window.girlTimeAuth = (function() {
       var noteEl = document.getElementById('eventNote-' + ev.id);
       if (noteEl) {
         noteEl.addEventListener('input', function(e) { ev.note = e.target.value; debounceSaveSession(); });
-        noteEl.addEventListener('change', function() { render(); });
+        noteEl.addEventListener('blur', function() {
+          setTimeout(function() { if (state.noteOpen) state.noteOpen[ev.id] = false; render(); }, 200);
+        });
       }
 
       var timeEl = document.getElementById('eventTime-' + ev.id);
@@ -3832,17 +3849,32 @@ window.girlTimeAuth = (function() {
     } else if (action === 'toggle-done') {
       var sr = findStepRef(eventId, id, chunkId);
       if (sr) {
-        sr.done = !sr.done;
+        var perStep = !!(state.settings && state.settings.checkMiniSteps);
+        if (sr.children && perStep) {
+          // checking a whole mini routine checks every step inside it
+          var allOn = sr.children.length && sr.children.every(function(c) { return c.done; });
+          sr.done = !allOn;
+          sr.children.forEach(function(c) { c.done = sr.done; });
+        } else {
+          sr.done = !sr.done;
+        }
+        if (chunkId && perStep) {
+          var parentChunk = findStepRef(eventId, chunkId, null);
+          if (parentChunk) parentChunk.done = parentChunk.children.every(function(c) { return c.done; });
+        }
         state.settings = state.settings || {};
         state.settings.checkHintSeen = true;
         debounceSaveSession();
-        if (sr.children) render();
-        var rowEl = btn.closest('.step-row');
-        if (rowEl) rowEl.classList.toggle('step-done', sr.done);
-        btn.classList.toggle('on', sr.done);
-        btn.setAttribute('aria-checked', sr.done ? 'true' : 'false');
-        if (btn.classList.contains('inline-check')) btn.textContent = sr.done ? '' : (btn.getAttribute('data-em') || '');
-        document.querySelectorAll('.check-hint').forEach(function(h) { h.remove(); });
+        if (sr.children || (chunkId && perStep)) {
+          render();
+        } else {
+          var rowEl = btn.closest('.step-row');
+          if (rowEl) rowEl.classList.toggle('step-done', sr.done);
+          btn.classList.toggle('on', sr.done);
+          btn.setAttribute('aria-checked', sr.done ? 'true' : 'false');
+          if (btn.classList.contains('inline-check')) btn.textContent = sr.done ? '' : (btn.getAttribute('data-em') || '');
+          document.querySelectorAll('.check-hint').forEach(function(h) { h.remove(); });
+        }
       }
     } else if (action === 'check-all') {
       var evk = findEvent(eventId);

@@ -1088,6 +1088,8 @@ body::before{background:#F9EEEE}
 .icon-action.is-set .ia-circle{background:var(--pale);border-color:var(--rose)}
 @media (min-width: 900px){ .plan-actions{margin-top:14px !important} }
 .event-card{margin-bottom:22px}
+.plan-actions{gap:8px !important}
+.icon-action{flex:0 0 82px;width:82px}
 </style>
 </head>
 <body>
@@ -3154,14 +3156,9 @@ window.girlTimeAuth = (function() {
 
       // one row under the timeline: check / uncheck all on the left, note on the right
       var noteOpenNow = !!(state.noteOpen && state.noteOpen[ev.id]);
-      html += '<div class="checks-row">';
       if (state.settings && state.settings.showCheckboxes && ev.steps.length) {
-        html += '<span class="checks-left"><button class="clear-checks-btn" data-action="check-all" data-event="' + ev.id + '">check</button><span class="checks-dot">/</span><button class="clear-checks-btn" data-action="clear-checks" data-event="' + ev.id + '">uncheck</button><span class="checks-dot">all</span></span>';
-      } else {
-        html += '<span></span>';
+        html += '<div class="checks-row"><span class="checks-left"><button class="clear-checks-btn" data-action="check-all" data-event="' + ev.id + '">check</button><span class="checks-dot">/</span><button class="clear-checks-btn" data-action="clear-checks" data-event="' + ev.id + '">uncheck</button><span class="checks-dot">all</span></span></div>';
       }
-      if (!noteOpenNow) html += '<button class="add-note-link" data-action="open-note" data-event="' + ev.id + '">' + (ev.note && ev.note.trim() ? 'edit note' : '+ add a note') + '</button>';
-      html += '</div>';
       if (noteOpenNow) {
         html += '<div class="note-editor"><label class="field-label" for="eventNote-' + ev.id + '">&#128221; notes</label>';
         html += '<textarea id="eventNote-' + ev.id + '" class="event-note" rows="2" placeholder="e.g. bring skates + jacket, venmo grace">' + esc(ev.note || '') + '</textarea></div>';
@@ -3182,6 +3179,7 @@ window.girlTimeAuth = (function() {
         else if (ev.reminder) schedLbl = 'reminders on';
         html += iconAction('open-schedule', '&#9200;', schedLbl, isSet ? ' is-set' : '');
       }
+      if (!noteOpenNow) html += iconAction('open-note', '&#128221;', (ev.note && ev.note.trim()) ? 'edit note' : 'add a note', (ev.note && ev.note.trim()) ? ' is-set' : '');
       html += '</div>'; // .plan-actions
 
       html += '</div>'; // .plan-cols

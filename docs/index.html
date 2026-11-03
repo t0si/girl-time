@@ -1990,7 +1990,7 @@ window.girlTimeAuth = (function() {
   function renderDuplicateModal() {
     var p = state.pendingSave || {};
     var kind = p.isMini ? 'mini routine' : 'routine';
-    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">"' + esc(p.name || '') + '" already exists</div>';
@@ -2125,7 +2125,7 @@ window.girlTimeAuth = (function() {
     var choice = sel === todayStr ? 'today' : (sel === tomorrowStr ? 'tomorrow' : 'other');
     var off = alertOffset();
     var alerts = reminderAlerts(ev, sel);
-    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">set reminders</div>';
@@ -2415,7 +2415,7 @@ window.girlTimeAuth = (function() {
     if (!ev || !dr) return '';
     var sched = computeSchedule(ev.time, ev.steps);
     var native = isNativeApp();
-    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">' + (native ? 'schedule &amp; reminders' : 'schedule') + '</div>';
@@ -2565,7 +2565,7 @@ window.girlTimeAuth = (function() {
 
   function renderSettingsModal() {
     var st = state.settings || {};
-    var html = '<div class="modal-backdrop modal-top" data-action="close-modal">';
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">settings</div>';
@@ -2669,7 +2669,7 @@ window.girlTimeAuth = (function() {
     if (!ev) return '';
     var sched = computeSchedule(ev.time, ev.steps);
     if (!sched.valid) return '';
-    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">export to calendar</div>';
@@ -3228,7 +3228,7 @@ window.girlTimeAuth = (function() {
     var evId = state.modalEventId;
     var mode = state.routinesModalMode || 'load';
     var ev = findEvent(evId);
-    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
 
@@ -3298,7 +3298,7 @@ window.girlTimeAuth = (function() {
     var step = list ? list.find(function(s) { return s.id === state.modalStepId; }) : null;
     if (!step) return '';
     var chunkAttr = chunkId ? ' data-chunk="' + chunkId + '"' : '';
-    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">edit step</div>';
@@ -3320,7 +3320,7 @@ window.girlTimeAuth = (function() {
   function renderSaveModal() {
     var evId = state.modalEventId;
     var ev = findEvent(evId);
-    var html = '<div class="modal-backdrop" data-action="close-modal">';
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">' + (ev && ev.isMiniMode ? 'save this mini routine' : 'save this schedule') + '</div>';
@@ -3338,7 +3338,7 @@ window.girlTimeAuth = (function() {
   }
 
   function renderAccountModal() {
-    var html = '<div class="modal-backdrop modal-top" data-action="close-modal">';
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
 
@@ -3371,7 +3371,7 @@ window.girlTimeAuth = (function() {
   }
 
   function renderDeleteAccountConfirmModal() {
-    var html = '<div class="modal-backdrop modal-top" data-action="close-modal">';
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">delete your account?</div>';
@@ -3383,7 +3383,7 @@ window.girlTimeAuth = (function() {
   }
 
   function renderResetConfirmModal() {
-    var html = '<div class="modal-backdrop modal-top" data-action="close-modal">';
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">start over?</div>';
@@ -3396,7 +3396,7 @@ window.girlTimeAuth = (function() {
 
   function renderExampleModal() {
     var exSched = computeSchedule(EXAMPLE_EVENT.time, EXAMPLE_EVENT.steps);
-    var html = '<div class="modal-backdrop modal-top" data-action="close-modal">';
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
     html += '<div class="modal-title">how it works</div>';

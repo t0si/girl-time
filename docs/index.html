@@ -1059,6 +1059,25 @@ body::before{background:#F9EEEE}
 .wordmark{font-size:32.2px;line-height:1.15}
 #app{padding-bottom:max(12px, env(safe-area-inset-bottom, 0px))}
 .field-label{color:#A8939E}
+/* undo / start over: size to their text so they never wrap or balloon */
+.utility-btn{width:auto;min-width:80px;white-space:nowrap;padding:6px 12px;line-height:1.25}
+/* wide screens (website on a computer): build + buttons on the left, the routine on the right */
+.get-app-top{display:none}
+@media (min-width: 900px) {
+  #app{max-width:980px;padding-top:44px}
+  .plan-cols{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);grid-template-areas:"left right" "actions right";grid-template-rows:auto 1fr;column-gap:36px;align-items:start}
+  .plan-left{grid-area:left}
+  .event-card-header{max-width:420px}
+  .plan-right{grid-area:right;margin-top:-50px}
+  .plan-right .startby{margin-top:0}
+  .plan-actions{grid-area:actions;margin:4px 0 0 !important}
+  .header-links{display:flex;align-items:center;gap:12px}
+  .get-app-top{display:inline-flex;align-items:center;height:36px;text-decoration:none}
+  .get-app-top img{display:block;height:36px;width:auto}
+  .get-app-badge{display:none !important}
+}
+.get-app-badge{display:block;width:fit-content;margin:26px auto 4px}
+.get-app-badge img{display:block;height:44px;width:auto}
 </style>
 </head>
 <body>
@@ -2653,7 +2672,7 @@ window.girlTimeAuth = (function() {
     var html = '<div class="modal-backdrop" data-action="close-modal">';
     html += '<div class="modal-sheet">';
     html += '<button class="modal-close" data-action="close-modal">&times;</button>';
-    html += '<div class="modal-title">add to calendar</div>';
+    html += '<div class="modal-title">export to calendar</div>';
     html += '<div class="warning-text" style="margin-top:0;">' + esc(ev.name || 'your event') + ' \u00B7 ' + minutesToClock(sched.startOverall) + ' \u2013 ' + minutesToClock(sched.eventMin) + '</div>';
     var todayStr = ymd(new Date());
     var tmw = new Date(); tmw.setDate(tmw.getDate() + 1);
@@ -3022,6 +3041,7 @@ window.girlTimeAuth = (function() {
     html += '  <div><div class="wordmark-row"><h1 class="wordmark">girl <span>time</span></h1></div>';
     html += '  </div>';
     html += '  <div class="header-links">';
+    if (!isNativeApp()) html += '    <a class="get-app-top" href="' + APP_STORE_URL + '" target="_blank" rel="noopener" aria-label="Download on the App Store"><img src="appstore-badge-white.png" alt="Download on the App Store" width="121" height="36"></a>';
     html += '    <button class="menu-circle" data-action="open-menu" aria-label="menu"><span class="menu-bars"></span></button>';
     html += '  </div>';
     html += '</div>';
@@ -3062,6 +3082,7 @@ window.girlTimeAuth = (function() {
       html += '  </div>';
       html += '</div>';
 
+      html += '<div class="plan-cols"><div class="plan-left">';
       html += '<div class="event-card">';
       if (state.events.length > 1) {
         html += '  <div class="event-card-remove-row"><button class="remove-event-link" data-action="remove-event" data-event="' + ev.id + '">remove</button></div>';
@@ -3097,6 +3118,7 @@ window.girlTimeAuth = (function() {
         html += '  <button class="primary-btn ghost" data-action="open-insert-chunk" data-event="' + ev.id + '" style="margin-top:8px;">+ add a saved mini routine</button>';
       }
       html += '</div>';
+      html += '</div><div class="plan-right">'; // left column ends, timeline column starts
 
       if (ev.isMiniMode) {
         var relSched = computeRelativeSchedule(ev.steps);
@@ -3134,10 +3156,11 @@ window.girlTimeAuth = (function() {
         html += '<div class="note-editor"><label class="field-label" for="eventNote-' + ev.id + '">&#128221; notes</label>';
         html += '<textarea id="eventNote-' + ev.id + '" class="event-note" rows="2" placeholder="e.g. bring skates + jacket, venmo grace">' + esc(ev.note || '') + '</textarea></div>';
       }
+      html += '</div>'; // .plan-right
       html += '<div class="plan-actions">';
-      html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '">save this ' + (ev.isMiniMode ? 'mini routine' : 'routine') + '</button>';
+      html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '">save ' + (ev.isMiniMode ? 'mini routine' : 'routine') + '</button>';
       if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
-        html += '<button class="primary-btn ghost" data-action="open-calendar" data-event="' + ev.id + '" style="margin-top:8px;">add to calendar</button>';
+        html += '<button class="primary-btn ghost" data-action="open-calendar" data-event="' + ev.id + '" style="margin-top:8px;">export to calendar</button>';
       }
       if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
         var linkedR = ev.routineId ? state.routines.find(function(x) { return x.id === ev.routineId && !x.isMini; }) : null;
@@ -3149,13 +3172,14 @@ window.girlTimeAuth = (function() {
       }
       html += '</div>'; // .plan-actions
 
+      html += '</div>'; // .plan-cols
       html += '</div>'; // .event-section
     });
 
     // "+ add another event" button removed for now - addEvent() still works if re-enabled later
 
     if (!isNativeApp()) {
-      html += '<a class="get-app-btn" href="' + APP_STORE_URL + '" target="_blank" rel="noopener"><span class="emoji">&#128241;</span> download the girl time app</a>';
+      html += '<a class="get-app-badge" href="' + APP_STORE_URL + '" target="_blank" rel="noopener" aria-label="Download on the App Store"><img src="appstore-badge-white.png" alt="Download on the App Store" width="148" height="44"></a>';
     }
     html += '<div class="app-footer">';
     html += '  <div><span class="emoji">&#127800;</span> created by Marina in sept 2026</div>';

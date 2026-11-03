@@ -1080,6 +1080,13 @@ body::before{background:#F9EEEE}
 .get-app-badge img{display:block;height:44px;width:auto}
 .event-card{padding-top:18px;padding-bottom:16px}
 .add-step-card{padding-top:16px;padding-bottom:18px}
+/* save / export / schedule: round icon buttons with labels */
+.plan-actions{display:flex !important;justify-content:center;gap:18px;margin:26px 0 12px !important;padding:0 !important;background:none !important;box-shadow:none !important}
+.icon-action{flex:0 0 96px;width:96px;background:none;border:none;padding:0;margin:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:7px;font-family:inherit;font-size:13px;font-weight:700;line-height:1.25;color:var(--rose-deep);text-align:center}
+.ia-circle{width:54px;height:54px;border-radius:50%;background:var(--surface);border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:23px;transition:transform .12s ease}
+.icon-action:active .ia-circle{transform:scale(.93);background:var(--pale)}
+.icon-action.is-set .ia-circle{background:var(--pale);border-color:var(--rose)}
+@media (min-width: 900px){ .plan-actions{margin-top:22px !important} }
 </style>
 </head>
 <body>
@@ -3160,17 +3167,19 @@ window.girlTimeAuth = (function() {
       }
       html += '</div>'; // .plan-right
       html += '<div class="plan-actions">';
-      html += '<button class="primary-btn ghost" data-action="open-save" data-event="' + ev.id + '">save ' + (ev.isMiniMode ? 'mini routine' : 'routine') + '</button>';
-      if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
-        html += '<button class="primary-btn ghost" data-action="open-calendar" data-event="' + ev.id + '" style="margin-top:8px;">export to calendar</button>';
+      // round icon buttons, like the menu button
+      function iconAction(action, icon, label, extraCls) {
+        return '<button class="icon-action' + (extraCls || '') + '" data-action="' + action + '" data-event="' + ev.id + '"><span class="ia-circle"><span class="emoji">' + icon + '</span></span><span class="ia-label">' + label + '</span></button>';
       }
+      html += iconAction('open-save', '&#128190;', 'save ' + (ev.isMiniMode ? 'mini routine' : 'routine'));
       if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
+        html += iconAction('open-calendar', '&#128197;', 'export to calendar');
         var linkedR = ev.routineId ? state.routines.find(function(x) { return x.id === ev.routineId && !x.isMini; }) : null;
         var schedLbl = isNativeApp() ? 'schedule &amp; reminders' : 'schedule';
         var isSet = !!(linkedR && linkedR.schedule) || !!ev.reminder;
-        if (linkedR && linkedR.schedule) schedLbl = esc(scheduleLabel(linkedR)) + ' &middot; edit';
-        else if (ev.reminder) schedLbl = '&#128276; reminders set &middot; ' + calLabel(ev.reminder.date).split(',')[0];
-        html += '<button class="primary-btn ghost' + (isSet ? ' rem-set' : '') + '" data-action="open-schedule" data-event="' + ev.id + '" style="margin-top:8px;">' + schedLbl + '</button>';
+        if (linkedR && linkedR.schedule) schedLbl = esc(scheduleLabel(linkedR).replace(/^[^a-z0-9]+/i, ''));
+        else if (ev.reminder) schedLbl = 'reminders on';
+        html += iconAction('open-schedule', '&#9200;', schedLbl, isSet ? ' is-set' : '');
       }
       html += '</div>'; // .plan-actions
 

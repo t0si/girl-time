@@ -3230,11 +3230,23 @@ window.girlTimeAuth = (function() {
     if (state.modal && state.modal === renderedModal) {
       html = html.replace('class="modal-backdrop', 'class="modal-backdrop no-anim').replace('class="modal-sheet"', 'class="modal-sheet no-anim"');
     }
+    // remember where the page was when a popup opens, and go back there when it closes
+    var popupOpening = state.modal && !renderedModal;
+    var popupClosing = !state.modal && renderedModal;
+    if (popupOpening) pageScrollBeforePopup = window.scrollY;
     renderedModal = state.modal;
     app.innerHTML = html;
     attachHandlers();
     renderTour();
+    if (popupClosing && pageScrollBeforePopup !== null) {
+      var y = pageScrollBeforePopup;
+      pageScrollBeforePopup = null;
+      window.scrollTo(0, y);
+      setTimeout(function() { window.scrollTo(0, y); }, 60);
+      setTimeout(function() { window.scrollTo(0, y); }, 350); // after the keyboard closes
+    }
   }
+  var pageScrollBeforePopup = null;
 
   function renderRoutinesModal() {
     var evId = state.modalEventId;
@@ -3496,6 +3508,7 @@ window.girlTimeAuth = (function() {
     var routineNameEl = document.getElementById('routineName');
     if (routineNameEl) {
       routineNameEl.addEventListener('input', function(e) { state.saveNameInput = e.target.value; });
+      try { routineNameEl.focus({ preventScroll: true }); } catch (e) {}
       routineNameEl.select();
     }
 

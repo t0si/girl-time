@@ -816,6 +816,21 @@
     .toast { transition: none; }
   }
 body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:linear-gradient(to right,#F9EDED,#F9EFEE 50%,#FAF3F1);z-index:9999;pointer-events:none;}
+body.touring::before{display:none}
+.plan-bottom .note-editor{margin:20px 0 8px}
+.plan-actions.five{gap:2px}
+.plan-actions.five .icon-action{flex:1 1 0;width:auto;min-width:0}
+.plan-actions.five .ia-circle{width:50px;height:50px}
+.share-sub{font-size:14px;color:#8a6a78;margin:-4px 0 6px}
+.share-opt .menu-sub{font-size:12.5px}
+.share-paste{width:100%;box-sizing:border-box;margin-top:10px;padding:13px 14px;border:1.5px solid var(--line);border-radius:14px;background:#fff;font:inherit;font-size:16px;color:#5E2A45}
+.share-preview{background:#fff;border-radius:16px;padding:16px;margin:8px 0 14px;max-height:46vh;overflow:auto}
+.share-pv-name{font-family:'Fraunces',serif;font-size:22px;font-weight:700;color:#5E2A45}
+.share-pv-meta{font-size:13px;color:#9A7E8B;margin:2px 0 10px}
+.share-pv-step{display:flex;align-items:center;gap:8px;font-size:15px;color:#5E2A45;padding:5px 0}
+.share-pv-step.sub{padding-left:22px}
+.share-pv-group{font-size:14px;font-weight:700;color:#C9668C;padding:8px 0 2px}
+.share-pv-dur{margin-left:auto;font-size:13px;color:#9A7E8B;white-space:nowrap}
 .chunk-badge.chunk-pill{display:flex;width:fit-content;align-items:center;gap:5px;background:transparent;color:#B65D80;border:none;border-radius:0;padding:0;font-size:0.9em;line-height:1.3;font-weight:500;text-transform:none;letter-spacing:normal;vertical-align:middle;cursor:pointer;text-decoration:underline;text-decoration-color:#DA7C9E;text-decoration-thickness:1.5px;text-underline-offset:3px;margin:2px 0 6px 0}
 .chunk-pill .chunk-chevron{display:inline-flex;margin:0;padding:0;font-size:0;color:inherit;transition:transform .2s}
 .chunk-pill .chunk-chevron.open{transform:rotate(90deg)}
@@ -1071,6 +1086,7 @@ body::before{background:#F9EEEE}
   .plan-right{grid-area:right;margin-top:-50px}
   .plan-right .startby{margin-top:0}
   .plan-actions{grid-area:actions;margin:4px 0 0 !important}
+  .plan-bottom{grid-area:actions}
   .header-links{display:flex;align-items:center;gap:12px}
   .get-app-top{display:inline-flex;align-items:center;height:36px;text-decoration:none}
   .get-app-top img{display:block;height:36px;width:auto}
@@ -1792,6 +1808,7 @@ window.girlTimeAuth = (function() {
       render();
       refreshAllReminders();
       startAutoLoadWatch();
+      checkIncomingShare();
       maybeStartTutorial();
     });
   }
@@ -1814,6 +1831,7 @@ window.girlTimeAuth = (function() {
       render();
       refreshAllReminders();
       startAutoLoadWatch();
+      checkIncomingShare();
       maybeStartTutorial();
     });
   }
@@ -2084,6 +2102,17 @@ window.girlTimeAuth = (function() {
     });
     var payload = { json: best ? JSON.stringify(best) : '' };
     callWidgetBridge('setSchedule', payload);
+    // while the app is open, move the Live Activity along at each step change
+    clearTimeout(window.__gtStepTimer);
+    if (best) {
+      var nextChange = null;
+      best.steps.forEach(function(st) {
+        [st.start, st.end].forEach(function(t) { if (t > now + 1000 && (nextChange === null || t < nextChange)) nextChange = t; });
+      });
+      if (nextChange !== null && nextChange - now < 6 * 3600 * 1000) {
+        window.__gtStepTimer = setTimeout(pushWidgetSchedule, nextChange - now + 1500);
+      }
+    }
     if (best && best.startBy - now <= 6 * 3600 * 1000) {
       callWidgetBridge('updateLiveActivity', payload);
     } else {
@@ -2115,7 +2144,7 @@ window.girlTimeAuth = (function() {
       var list = [];
       upcomingOccurrences(7).forEach(function(o) {
         reminderAlerts(o.ev, o.date).forEach(function(a) {
-          if (a.at.getTime() > Date.now() + 5000) list.push({ title: a.title, body: a.body, schedule: { at: a.at, allowWhileIdle: true } });
+          if (a.at.getTime() > Date.now() + 5000) list.push({ title: a.title, body: a.body, sound: 'gt-chime.wav', schedule: { at: a.at, allowWhileIdle: true } });
         });
       });
       list.sort(function(a, b) { return a.schedule.at - b.schedule.at; });
@@ -2551,6 +2580,7 @@ window.girlTimeAuth = (function() {
     html += '<div class="modal-title">menu</div>';
     html += '<button class="menu-item" data-action="open-example"><span class="emoji menu-ic">&#128161;</span><span>how it works</span><span class="menu-chev">&rsaquo;</span></button>';
     if (!isNativeApp()) html += '<a class="menu-item" href="' + APP_STORE_URL + '" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;"><span class="emoji menu-ic">&#128241;</span><span>download the iPhone app</span><span class="menu-chev">&rsaquo;</span></a>';
+    html += '<button class="menu-item" data-action="open-shared-paste"><span class="emoji menu-ic">&#128279;</span><span>add a shared routine</span><span class="menu-chev">&rsaquo;</span></button>';
     html += '<button class="menu-item" data-action="start-tutorial"><span class="emoji menu-ic">&#127872;</span><span>replay tutorial</span><span class="menu-chev">&rsaquo;</span></button>';
     html += '<button class="menu-item" data-action="open-settings"><span class="emoji menu-ic">&#9881;&#65039;</span><span>settings</span><span class="menu-chev">&rsaquo;</span></button>';
     if (state.user) {
@@ -2937,7 +2967,17 @@ window.girlTimeAuth = (function() {
         var b = e.target.closest('[data-tour]');
         if (!b) { e.stopPropagation(); return; }
         var a = b.getAttribute('data-tour');
-        if (a === 'next') tourGo(state.tour.step + 1);
+        if (a === 'next') {
+          var cur = tourSteps()[state.tour.step];
+          if (cur && cur.kind === 'add') {
+            // "next" on an add step adds the filled-in step for you, like tapping "+ add step"
+            var before = state.tour.step;
+            var addBtn = document.querySelector('#app .add-step-card [data-action="add-step"]');
+            if (addBtn && !addBtn.disabled) addBtn.click();
+            if (state.tour && state.tour.step === before) tourGo(before + 1);
+            else if (state.tour) renderTour();
+          } else tourGo(state.tour.step + 1);
+        }
         else if (a === 'skip' || a === 'finish') endTutorial();
       });
       window.addEventListener('resize', function() { if (state.tour) positionTour(); });
@@ -2983,7 +3023,7 @@ window.girlTimeAuth = (function() {
     if (s.kind !== 'add') html += '<div class="tour-block tb-hole"></div>';
     html += '<div class="tour-card tour-tip"><div class="tour-text">' + esc(s.text()) + '</div>';
     html += '<div class="tour-foot"><span class="tour-count">' + state.tour.step + ' of ' + total + '</span><button class="tour-skip" data-tour="skip">skip</button>';
-    if (s.kind !== 'add') html += '<button class="tour-next" data-tour="next">next</button>';
+    html += '<button class="tour-next" data-tour="next">next</button>';
     html += '</div></div>';
     layer.innerHTML = html;
 
@@ -3140,14 +3180,12 @@ window.girlTimeAuth = (function() {
         html += '  <div class="eyebrow">total time</div>';
         html += '  <div class="time">' + elapsedLabel(relSched.totalMinutes) + '</div>';
         html += '</div>';
-        html += renderNoteBox(ev);
         html += (state.settings && state.settings.showCheckboxes && !state.settings.checkHintSeen ? '<div class="check-hint">tap an emoji to check it off</div>' : '') + renderRelativeTimelineHTML(relSched, true, ev.id);
       } else if (sched.valid) {
         html += '<div class="startby">';
         html += '  <div class="eyebrow">start by</div>';
         html += '  <div class="time">' + minutesToClock(sched.startOverall) + '</div>';
         html += '</div>';
-        html += renderNoteBox(ev);
         html += (state.settings && state.settings.showCheckboxes && !state.settings.checkHintSeen ? '<div class="check-hint">tap an emoji to check it off</div>' : '') + renderTimelineHTML(sched, ev.name, true, ev.id);
       } else if (ev.steps.length) {
         html += '<div class="empty-msg">' + ev.steps.length + ' step' + (ev.steps.length === 1 ? '' : 's') +
@@ -3161,28 +3199,29 @@ window.girlTimeAuth = (function() {
       if (state.settings && state.settings.showCheckboxes && ev.steps.length) {
         html += '<div class="checks-row"><span class="checks-left"><button class="clear-checks-btn" data-action="check-all" data-event="' + ev.id + '">check</button><span class="checks-dot">/</span><button class="clear-checks-btn" data-action="clear-checks" data-event="' + ev.id + '">uncheck</button><span class="checks-dot">all</span></span></div>';
       }
-      if (noteOpenNow) {
-        html += '<div class="note-editor"><label class="field-label" for="eventNote-' + ev.id + '">&#128221; notes</label>';
-        html += '<textarea id="eventNote-' + ev.id + '" class="event-note" rows="2" placeholder="e.g. bring skates + jacket, venmo grace">' + esc(ev.note || '') + '</textarea></div>';
-      }
       html += '</div>'; // .plan-right
-      html += '<div class="plan-actions">';
+      var pa = '', paCount = 0;
       // round icon buttons, like the menu button
       function iconAction(action, icon, label, extraCls) {
         return '<button class="icon-action' + (extraCls || '') + '" data-action="' + action + '" data-event="' + ev.id + '"><span class="ia-circle"><span class="emoji">' + icon + '</span></span><span class="ia-label">' + label + '</span></button>';
       }
-      html += iconAction('open-save', '&#128190;', 'save ' + (ev.isMiniMode ? 'mini routine' : 'routine'));
+      paCount++; pa += iconAction('open-save', '&#128190;', 'save ' + (ev.isMiniMode ? 'mini routine' : 'routine'));
       if (!ev.isMiniMode && sched && sched.valid && ev.steps.length) {
-        html += iconAction('open-calendar', '&#128197;', 'export to calendar');
+        paCount++; pa += iconAction('open-calendar', '&#128197;', 'export to calendar');
         var linkedR = ev.routineId ? state.routines.find(function(x) { return x.id === ev.routineId && !x.isMini; }) : null;
         var schedLbl = isNativeApp() ? 'schedule &amp; reminders' : 'schedule';
         var isSet = !!(linkedR && linkedR.schedule) || !!ev.reminder;
         if (linkedR && linkedR.schedule) schedLbl = esc(scheduleLabel(linkedR).replace(/^[^a-z0-9]+/i, ''));
         else if (ev.reminder) schedLbl = 'reminders on';
-        html += iconAction('open-schedule', '&#9200;', schedLbl, isSet ? ' is-set' : '');
+        paCount++; pa += iconAction('open-schedule', '&#9200;', schedLbl, isSet ? ' is-set' : '');
       }
-      if (!noteOpenNow) html += iconAction('open-note', '&#128221;', (ev.note && ev.note.trim()) ? 'edit note' : 'add a note', (ev.note && ev.note.trim()) ? ' is-set' : '');
+      if (ev.steps.length) { paCount++; pa += iconAction('open-share', '&#128228;', 'share'); }
+      html += '<div class="plan-bottom">';
+      html += '<div class="plan-actions' + (paCount >= 5 ? ' five' : '') + '">' + pa;
       html += '</div>'; // .plan-actions
+      html += '<div class="note-editor"><label class="field-label" for="eventNote-' + ev.id + '">&#128221; notes</label>';
+      html += '<textarea id="eventNote-' + ev.id + '" class="event-note" rows="2" placeholder="e.g. bring skates + jacket, venmo grace">' + esc(ev.note || '') + '</textarea></div>';
+      html += '</div>'; // .plan-bottom
 
       html += '</div>'; // .plan-cols
       html += '</div>'; // .event-section
@@ -3225,6 +3264,10 @@ window.girlTimeAuth = (function() {
       html += renderEditStepModal();
     } else if (state.modal === 'account') {
       html += renderAccountModal();
+    } else if (state.modal === 'share') {
+      html += renderShareModal();
+    } else if (state.modal === 'shared') {
+      html += renderSharedModal();
     }
 
     if (state.modal && state.modal === renderedModal) {
@@ -3588,6 +3631,324 @@ window.girlTimeAuth = (function() {
     });
   }
 
+  // ---------- sharing a plan / routine ----------
+  var SHARE_BASE = 'https://girl-time.app/';
+  function b64urlEncode(str) {
+    var bytes = new TextEncoder().encode(str), bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function b64urlDecode(str) {
+    str = String(str || '').replace(/-/g, '+').replace(/_/g, '/');
+    while (str.length % 4) str += '=';
+    var bin = atob(str), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  function shareEncode(ev) {
+    var steps = (ev.steps || []).map(function(st) {
+      if (isChunk(st)) return { c: st.name || '', k: (st.children || []).map(function(c) { return [c.label || '', c.hours || 0, c.minutes || 0]; }) };
+      return [st.label || '', st.hours || 0, st.minutes || 0];
+    });
+    return b64urlEncode(JSON.stringify({ v: 1, n: ev.name || '', t: ev.isMiniMode ? '' : (ev.time || ''), m: ev.isMiniMode ? 1 : 0, s: steps }));
+  }
+  function cleanShareStep(a) {
+    if (!Array.isArray(a)) return null;
+    var label = String(a[0] || '').slice(0, 80).trim();
+    var h = Math.max(0, Math.min(23, parseInt(a[1], 10) || 0));
+    var m = Math.max(0, Math.min(59, parseInt(a[2], 10) || 0));
+    if (!label || (!h && !m)) return null;
+    return { label: label, hours: h, minutes: m };
+  }
+  function shareDecode(str) {
+    try {
+      var o = JSON.parse(b64urlDecode(str));
+      if (!o || !Array.isArray(o.s)) return null;
+      var steps = [];
+      o.s.slice(0, 60).forEach(function(st) {
+        if (st && !Array.isArray(st) && Array.isArray(st.k)) {
+          var kids = st.k.slice(0, 40).map(cleanShareStep).filter(Boolean);
+          if (kids.length) steps.push({ kind: 'chunk', name: String(st.c || 'mini routine').slice(0, 60), children: kids });
+        } else {
+          var one = cleanShareStep(st);
+          if (one) steps.push(one);
+        }
+      });
+      if (!steps.length) return null;
+      return { name: String(o.n || '').slice(0, 80), time: String(o.t || '').slice(0, 12), isMini: !!o.m, steps: steps };
+    } catch (e) { return null; }
+  }
+  function shareLinkFor(ev) { return SHARE_BASE + '#share=' + shareEncode(ev); }
+  function sharedFromText(txt) {
+    var m = String(txt || '').match(/share=([A-Za-z0-9_-]+)/);
+    return m ? shareDecode(m[1]) : null;
+  }
+  function sharedAsEventSteps(o) {
+    return o.steps.map(function(st) {
+      if (st.kind === 'chunk') return { id: uid(), kind: 'chunk', name: st.name, note: '', collapsed: true,
+        children: st.children.map(function(c) { return { id: uid(), label: c.label, hours: c.hours, minutes: c.minutes }; }) };
+      return { id: uid(), label: st.label, hours: st.hours, minutes: st.minutes };
+    });
+  }
+  function sharedTotalMinutes(o) {
+    var t = 0;
+    o.steps.forEach(function(st) { (st.kind === 'chunk' ? st.children : [st]).forEach(function(c) { t += c.hours * 60 + c.minutes; }); });
+    return t;
+  }
+
+  // a shared link that opened the page: girl-time.app/#share=...
+  function checkIncomingShare() {
+    var h = location.hash || '';
+    if (h.indexOf('share=') === -1) return false;
+    var o = sharedFromText(h);
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    if (!o) { showToast('That share link didn’t work'); return false; }
+    state.sharedIncoming = o;
+    state.modal = 'shared';
+    window.__gtTourChecked = true; // don't start the tutorial on top of this
+    render();
+    return true;
+  }
+
+  function saveSharedRoutine() {
+    var o = state.sharedIncoming;
+    if (!o) return;
+    var evSteps = sharedAsEventSteps(o);
+    var name = (o.name || '').trim() || (o.isMini ? 'shared mini routine' : 'shared routine');
+    var dupe = state.routines.some(function(r) { return !!r.isMini === o.isMini && normRoutineName(r.name) === normRoutineName(name); });
+    if (dupe) name = nextCopyName(name, o.isMini);
+    var tmp = { steps: evSteps };
+    var routine = {
+      id: uid(), name: name, eventName: o.isMini ? '' : (o.name || ''), time: o.isMini ? '' : (o.time || ''),
+      isMini: o.isMini, note: '',
+      steps: o.isMini ? flattenEventSteps(tmp) : evSteps.map(savedStepFromEvent)
+    };
+    state.routines.unshift(routine);
+    state.sharedIncoming = null;
+    state.modal = null;
+    saveRoutines().then(function() {
+      showToast('Saved "' + routine.name + '" to your ' + (o.isMini ? 'mini routines' : 'routines') + ' 🎀', 2600);
+    }).catch(function() { showToast('Could not save'); });
+    learnStepTimes();
+    render();
+  }
+  function loadSharedNow() {
+    var o = state.sharedIncoming;
+    var ev = state.events[0];
+    if (!o || !ev) return;
+    snapshotState();
+    ev.name = o.name || '';
+    ev.time = o.isMini ? '' : (o.time || '');
+    ev.isMiniMode = !!o.isMini;
+    ev.steps = sharedAsEventSteps(o);
+    ev.note = '';
+    ev.routineId = undefined; ev.occurrence = undefined; ev.autoLoaded = false;
+    delete ev.reminder;
+    state.sharedIncoming = null;
+    state.modal = null;
+    debounceSaveSession();
+    showToast('Loaded "' + (o.name || 'shared plan') + '"');
+    render();
+    window.scrollTo(0, 0);
+  }
+
+  function renderSharedModal() {
+    var o = state.sharedIncoming;
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
+    html += '<div class="modal-sheet">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    if (!o) {
+      html += '<div class="modal-title">add a shared routine</div>';
+      html += '<div class="share-sub">paste the girl time link a friend sent you</div>';
+      html += '<input type="text" id="sharedPasteInput" class="share-paste" placeholder="https://girl-time.app/#share=..." autocomplete="off" autocapitalize="off" spellcheck="false">';
+      html += '<button class="primary-btn" data-action="shared-paste-go" style="margin-top:12px;">open</button>';
+      html += '</div></div>';
+      return html;
+    }
+    var total = sharedTotalMinutes(o);
+    var n = 0; o.steps.forEach(function(st) { n += st.kind === 'chunk' ? st.children.length : 1; });
+    html += '<div class="modal-title">someone shared a ' + (o.isMini ? 'mini routine' : 'routine') + ' <span class="emoji">&#127872;</span></div>';
+    html += '<div class="share-preview">';
+    html += '<div class="share-pv-name">' + esc(o.name || 'untitled') + '</div>';
+    html += '<div class="share-pv-meta">' + n + ' step' + (n === 1 ? '' : 's') + ' · ' + esc(elapsedLabel(total)) + ' total' + (o.time && !o.isMini ? ' · ' + esc(o.time) : '') + '</div>';
+    html += '<div class="share-pv-steps">';
+    o.steps.forEach(function(st) {
+      if (st.kind === 'chunk') {
+        html += '<div class="share-pv-group"><span class="emoji">&#127872;</span> ' + esc(st.name) + '</div>';
+        st.children.forEach(function(c) { html += '<div class="share-pv-step sub"><span class="emoji">' + guessStepEmoji(c.label) + '</span> ' + esc(c.label) + '<span class="share-pv-dur">' + esc(durLong(c.hours, c.minutes)) + '</span></div>'; });
+      } else {
+        html += '<div class="share-pv-step"><span class="emoji">' + guessStepEmoji(st.label) + '</span> ' + esc(st.label) + '<span class="share-pv-dur">' + esc(durLong(st.hours, st.minutes)) + '</span></div>';
+      }
+    });
+    html += '</div></div>';
+    html += '<button class="primary-btn" data-action="shared-save">save to my ' + (o.isMini ? 'mini routines' : 'routines') + '</button>';
+    html += '<button class="primary-btn ghost" data-action="shared-load" style="margin-top:8px;">load it now</button>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderShareModal() {
+    var ev = findEvent(state.modalEventId);
+    var html = '<div class="modal-backdrop menu-top" data-action="close-modal">';
+    html += '<div class="modal-sheet">';
+    html += '<button class="modal-close" data-action="close-modal">&times;</button>';
+    html += '<div class="modal-title">share</div>';
+    if (ev && ev.name) html += '<div class="share-sub">' + esc(ev.name) + '</div>';
+    html += '<button class="menu-item share-opt" data-action="share-link" data-event="' + (ev ? ev.id : '') + '"><span class="emoji menu-ic">&#128279;</span><span>send a link<div class="menu-sub">they can add it to their routines</div></span><span class="menu-chev">&rsaquo;</span></button>';
+    html += '<button class="menu-item share-opt" data-action="share-image" data-event="' + (ev ? ev.id : '') + '"><span class="emoji menu-ic">&#128444;&#65039;</span><span>share as a picture<div class="menu-sub">a pretty image of your timeline</div></span><span class="menu-chev">&rsaquo;</span></button>';
+    html += '<button class="menu-item share-opt" data-action="share-text" data-event="' + (ev ? ev.id : '') + '"><span class="emoji menu-ic">&#128221;</span><span>share as text<div class="menu-sub">a simple list to paste anywhere</div></span><span class="menu-chev">&rsaquo;</span></button>';
+    html += '</div></div>';
+    return html;
+  }
+
+  // the timeline as plain rows (clock times for a plan, elapsed times for a mini routine)
+  function shareRows(ev) {
+    var rows = [];
+    if (ev.isMiniMode) {
+      var rel = computeRelativeSchedule(ev.steps || []);
+      rel.rows.forEach(function(r) {
+        if (r.kind === 'chunk') { rows.push({ group: r.name }); r.children.forEach(function(c) { rows.push({ time: '+' + elapsedLabel(c.start), emoji: c.emoji, label: c.label, dur: durLong(c.hours, c.minutes), sub: true }); }); }
+        else rows.push({ time: '+' + elapsedLabel(r.start), emoji: r.emoji, label: r.label, dur: durLong(r.hours, r.minutes) });
+      });
+      return { rows: rows, start: null, end: null, total: rel.totalMinutes };
+    }
+    var sc = computeSchedule(ev.time, ev.steps || []);
+    if (!sc.valid) return { rows: [], start: null, end: null, total: 0 };
+    sc.rows.forEach(function(r) {
+      if (r.kind === 'chunk') { rows.push({ group: r.name }); r.children.forEach(function(c) { rows.push({ time: minutesToClock(c.start), emoji: c.emoji, label: c.label, dur: durLong(c.hours, c.minutes), sub: true }); }); }
+      else rows.push({ time: minutesToClock(r.start), emoji: r.emoji, label: r.label, dur: durLong(r.hours, r.minutes) });
+    });
+    return { rows: rows, start: minutesToClock(sc.startOverall), end: minutesToClock(sc.eventMin), total: sc.eventMin - sc.startOverall };
+  }
+  function shareTextFor(ev, withLink) {
+    var t = shareRows(ev), out = [];
+    out.push((ev.name || 'my plan') + (t.end ? ' · ' + t.end : '') + ' 🎀');
+    if (t.start) out.push('start by ' + t.start);
+    out.push('');
+    t.rows.forEach(function(r) {
+      if (r.group) out.push('🎀 ' + r.group);
+      else out.push((r.sub ? '   ' : '') + r.time + '  ' + r.emoji + ' ' + r.label + ' (' + r.dur + ')');
+    });
+    if (t.end) out.push(t.end + '  📍 ' + (ev.name || 'event'));
+    out.push('');
+    out.push(withLink ? 'add it to your girl time: ' + shareLinkFor(ev) : 'made with girl time 🌸 girl-time.app');
+    return out.join('\n');
+  }
+
+  function drawShareImage(ev) {
+    var t = shareRows(ev);
+    var W = 1080, pad = 84, rowH = 104, groupH = 84;
+    var bodyH = 0; t.rows.forEach(function(r) { bodyH += r.group ? groupH : rowH; });
+    var top = 340;
+    var H = top + bodyH + (t.end ? rowH : 0) + 230;
+    var cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    var g = cv.getContext('2d');
+    var serif = "'Fraunces', Georgia, serif", sans = "'Manrope', -apple-system, sans-serif";
+    var plum = '#5E2A45', rose = '#C9668C', soft = '#9A7E8B';
+    g.fillStyle = '#F9EEEE'; g.fillRect(0, 0, W, H);
+    // cherry blossoms in the corners, like the app icon
+    var petal = new Path2D('M0 0 C-17 -9 -22 -30 -9 -38.5 Q-4.5 -41 0 -34.5 Q4.5 -41 9 -38.5 C22 -30 17 -9 0 0Z');
+    function blossom(x, y, s, rot, a) {
+      g.save(); g.translate(x, y); g.rotate(rot); g.scale(s, s); g.globalAlpha = a;
+      var pg = g.createRadialGradient(0, 0, 0, 0, 0, 40);
+      pg.addColorStop(0.2, '#FFFFFF'); pg.addColorStop(1, '#F3B6CB');
+      g.shadowColor = 'rgba(122,47,82,.22)'; g.shadowBlur = 6; g.shadowOffsetY = 2.5;
+      for (var i = 0; i < 5; i++) { g.fillStyle = pg; g.fill(petal); g.rotate(Math.PI * 2 / 5); }
+      g.shadowColor = 'transparent';
+      var gl = g.createRadialGradient(0, 0, 0, 0, 0, 9);
+      gl.addColorStop(0, 'rgba(225,185,95,.75)'); gl.addColorStop(1, 'rgba(225,185,95,0)');
+      g.fillStyle = gl; g.beginPath(); g.arc(0, 0, 9, 0, Math.PI * 2); g.fill();
+      g.restore();
+    }
+    blossom(W - 92, 100, 1.9, 0.3, 1);
+    blossom(W - 214, 44, 0.85, 1.1, 0.85);
+    blossom(W - 40, 236, 0.7, 0.6, 0.75);
+    blossom(70, H - 84, 1.4, 0.9, 0.95);
+    blossom(178, H - 34, 0.65, 0.2, 0.8);
+    blossom(W - 70, H - 60, 0.8, 1.4, 0.8);
+    g.textBaseline = 'alphabetic';
+    function fit(txt, maxW) { var s2 = txt; while (g.measureText(s2).width > maxW && s2.length > 4) s2 = s2.slice(0, -2); return s2 === txt ? txt : s2 + '…'; }
+    g.fillStyle = plum; g.font = '700 76px ' + serif;
+    g.fillText(fit(ev.name || (ev.isMiniMode ? 'my mini routine' : 'my plan'), W - pad * 2 - 150), pad, 150);
+    g.font = '600 38px ' + sans; g.fillStyle = rose;
+    g.fillText(t.start ? 'start by ' + t.start + '  ·  ' + t.end + ' event' : 'mini routine · ' + elapsedLabel(t.total) + ' total', pad, 222);
+    g.strokeStyle = '#EAD3DC'; g.lineWidth = 3; g.setLineDash([10, 10]);
+    g.beginPath(); g.moveTo(pad, 272); g.lineTo(W - pad, 272); g.stroke(); g.setLineDash([]);
+    var y = top;
+    var timeX = pad, emoX = pad + 250, labelX = pad + 330;
+    t.rows.forEach(function(r) {
+      if (r.group) { g.font = '700 38px ' + sans; g.fillStyle = rose; g.fillText(fit('🎀 ' + r.group, W - pad * 2), pad, y + 50); y += groupH; return; }
+      g.font = '700 40px ' + serif; g.fillStyle = plum; g.fillText(r.time, timeX + (r.sub ? 20 : 0), y + 44);
+      g.font = '44px ' + sans; g.fillText(r.emoji || '', emoX, y + 46);
+      g.font = '600 40px ' + sans; g.fillStyle = plum; g.fillText(fit(r.label, W - pad - labelX - 10), labelX, y + 30);
+      g.font = '500 32px ' + sans; g.fillStyle = soft; g.fillText(r.dur || '', labelX, y + 74);
+      y += rowH;
+    });
+    if (t.end) {
+      g.font = '700 44px ' + serif; g.fillStyle = plum; g.fillText(t.end, timeX, y + 46);
+      g.font = '44px ' + sans; g.fillText('📍', emoX, y + 48);
+      g.font = '700 42px ' + serif; g.fillText(fit(ev.name || 'event', W - pad - labelX - 10), labelX, y + 46);
+    }
+    // girl time logo + website at the bottom
+    g.font = '700 54px ' + serif;
+    var w1 = g.measureText('girl ').width, w2 = g.measureText('time').width, x0 = W / 2 - (w1 + w2) / 2;
+    g.fillStyle = plum; g.fillText('girl', x0, H - 104);
+    g.fillStyle = rose; g.fillText('time', x0 + w1, H - 104);
+    g.font = '600 30px ' + sans; g.fillStyle = soft; g.textAlign = 'center';
+    g.fillText('girl-time.app', W / 2, H - 58);
+    g.textAlign = 'left';
+    return cv;
+  }
+
+  function nativeShare(opts) {
+    var C = window.Capacitor;
+    var WB = C && ((C.Plugins && C.Plugins.WidgetBridge) || (C.registerPlugin && C.registerPlugin('WidgetBridge')));
+    if (!WB || !WB.share) return Promise.reject(new Error('no native share'));
+    return WB.share(opts);
+  }
+  function copyText(txt, msg) {
+    var done = function() { showToast(msg || 'Copied'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(txt).then(done).catch(function() { prompt('Copy this:', txt); });
+    prompt('Copy this:', txt);
+  }
+  function shareLinkAction(ev) {
+    var url = shareLinkFor(ev), text = (ev.name || 'my routine') + ' on girl time 🎀';
+    state.modal = null; render();
+    if (isNativeApp()) return nativeShare({ text: text, url: url }).catch(function() { copyText(url, 'Link copied'); });
+    if (navigator.share) return navigator.share({ title: text, text: text, url: url }).catch(function(e) { if (e && e.name !== 'AbortError') copyText(url, 'Link copied'); });
+    copyText(url, 'Link copied - paste it anywhere');
+  }
+  function shareTextAction(ev) {
+    var txt = shareTextFor(ev, true);
+    state.modal = null; render();
+    if (isNativeApp()) return nativeShare({ text: txt }).catch(function() { copyText(txt, 'Copied'); });
+    if (navigator.share) return navigator.share({ text: txt }).catch(function(e) { if (e && e.name !== 'AbortError') copyText(txt, 'Copied'); });
+    copyText(txt, 'Copied - paste it anywhere');
+  }
+  function shareImageAction(ev) {
+    state.modal = null; render();
+    var ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+    ready.then(function() {
+      var cv = drawShareImage(ev);
+      var fname = ((ev.name || 'girl-time').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'girl-time') + '.png';
+      if (isNativeApp()) {
+        return nativeShare({ image: cv.toDataURL('image/png').split(',')[1] }).catch(function() { showToast('Could not share the picture'); });
+      }
+      cv.toBlob(function(blob) {
+        var file = blob && window.File ? new File([blob], fname, { type: 'image/png' }) : null;
+        if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file] }).catch(function() {});
+          return;
+        }
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = fname;
+        document.body.appendChild(a); a.click(); a.remove();
+        showToast('Picture saved');
+      }, 'image/png');
+    });
+  }
+
   function onClick(e) {
     var btn = e.target.closest('[data-action]');
     if (!btn) return;
@@ -3670,6 +4031,27 @@ window.girlTimeAuth = (function() {
       state.modalEventId = eventId;
       state.saveNameInput = (findEvent(eventId) || {}).name || '';
       render();
+    } else if (action === 'open-share') {
+      state.modal = 'share';
+      state.modalEventId = eventId;
+      render();
+    } else if (action === 'share-link' || action === 'share-image' || action === 'share-text') {
+      var shEv = findEvent(eventId);
+      if (shEv) (action === 'share-link' ? shareLinkAction : action === 'share-image' ? shareImageAction : shareTextAction)(shEv);
+    } else if (action === 'shared-save') {
+      saveSharedRoutine();
+    } else if (action === 'shared-load') {
+      loadSharedNow();
+    } else if (action === 'open-shared-paste') {
+      state.sharedIncoming = null;
+      state.modal = 'shared';
+      render();
+      setTimeout(function() { var pi = document.getElementById('sharedPasteInput'); if (pi) pi.focus({ preventScroll: true }); }, 50);
+    } else if (action === 'shared-paste-go') {
+      var pin = document.getElementById('sharedPasteInput');
+      var got = pin && sharedFromText(pin.value);
+      if (!got) showToast('That doesn\u2019t look like a girl time link');
+      else { state.sharedIncoming = got; render(); }
     } else if (action === 'open-example') {
       state.modal = 'example';
       render();
@@ -4212,6 +4594,7 @@ window.girlTimeAuth = (function() {
     app.addEventListener('click', onClick);
     app.addEventListener('pointerdown', onDragStart);
     initSwipeDelete(app);
+    window.addEventListener('hashchange', function() { if (state.loaded) checkIncomingShare(); });
     render();
     if (window.girlTimeAuth) {
       window.girlTimeAuth.onChange(handleAuthChange);
